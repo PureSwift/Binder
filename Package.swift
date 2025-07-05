@@ -3,17 +3,41 @@ import PackageDescription
 
 let package = Package(
     name: "Binder",
+    platforms: [
+        .macOS(.v10_15),
+        .iOS(.v13),
+        .watchOS(.v6),
+        .tvOS(.v13),
+    ],
     products: [
         .library(
             name: "Binder",
             targets: ["Binder"]
         )
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/apple/swift-system",
+            from: "1.4.0"
+        ),
+        .package(
+            url: "https://github.com/PureSwift/Socket",
+            branch: "main"
+        )
+    ],
     targets: [
         .target(
             name: "Binder",
             dependencies: [
-                "CBinder"
+                "CBinder",
+                .product(
+                    name: "SystemPackage",
+                    package: "swift-system"
+                ),
+                .product(
+                    name: "Socket",
+                    package: "Socket"
+                )
             ]
         ),
         .target(
