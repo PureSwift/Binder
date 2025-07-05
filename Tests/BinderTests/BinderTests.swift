@@ -5,9 +5,16 @@ import CBinder
 @Suite
 struct BinderTests {
     
+    #if os(Android) || os(Linux)
+    @Test func readBinderVersion() throws {
+        let version = try BinderVersion.current
+        print("Binder version:", version)
+    }
+    #endif
+    
     @Test func binderType() throws {
         #expect(BinderType.binder.rawValue == BINDER_TYPE_BINDER)
-        #expect(BinderType(rawValue: UInt32(BINDER_TYPE_BINDER)) == .binder)
+        #expect(BinderType(rawValue: BinderType.RawValue(BINDER_TYPE_BINDER)) == .binder)
     }
     
     @Test func driverCommandProtocol() throws {
