@@ -6,9 +6,11 @@
  */
 #ifndef _UAPI_LINUX_BINDERFS_H
 #define _UAPI_LINUX_BINDERFS_H
+#if __linux__
 #include <linux/android/binder.h>
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#endif
 #define BINDERFS_MAX_NAME 255
 struct binderfs_device {
   char name[BINDERFS_MAX_NAME + 1];

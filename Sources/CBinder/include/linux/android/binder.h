@@ -9,6 +9,12 @@
 #if __linux__
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#else
+#include <stdint.h>
+#include <sys/types.h>
+#endif
+#if __APPLE__
+#include <sys/ioccom.h>
 #endif
 #define B_PACK_CHARS(c1,c2,c3,c4) ((((c1) << 24)) | (((c2) << 16)) | (((c3) << 8)) | (c4))
 #define B_TYPE_LARGE 0x85

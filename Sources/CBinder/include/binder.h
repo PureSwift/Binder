@@ -5,6 +5,9 @@
  * for more information.
  */
 
+#include <stdint.h>
+#include <sys/types.h>
+
 #ifdef __BIONIC__
 
 #include <android/api-level.h>
@@ -23,7 +26,6 @@
 #include <sys/socket.h>
 #include <sys/sysinfo.h>
 #include <sys/timerfd.h>
-#include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
