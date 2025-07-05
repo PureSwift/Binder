@@ -28,14 +28,14 @@ extension BinderType: IOControlID { }
 
 extension BinderType: RawRepresentable {
     
-    public init?(rawValue: CUnsignedLong) {
+    public init?(rawValue: CInterop.IOControlID) {
         guard let value = Self.allCases.first(where: { $0.rawValue == rawValue }) else {
             return nil
         }
         self = value
     }
     
-    public var rawValue: CUnsignedLong {
+    public var rawValue: CInterop.IOControlID {
         switch self {
         case .binder:
             RawValue(BINDER_TYPE_BINDER)
