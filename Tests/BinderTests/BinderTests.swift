@@ -16,4 +16,12 @@ struct BinderTests {
         #expect(DriverCommandProtocol.transaction.description == "BC_TRANSACTION")
         #expect(DriverCommandProtocol(rawValue: 0).description == "DriverCommandProtocol(rawValue: 0)")
     }
+    
+    @Test func driverReturnProtocol() throws {
+        
+        #expect(DriverReturnProtocol.error == BR_ERROR)
+        #expect(DriverReturnProtocol.ok.rawValue == BR_OK.rawValue)
+        #expect(DriverReturnProtocol.finished.description == "BR_FINISHED")
+        #expect(DriverReturnProtocol(rawValue: 0).description == "DriverReturnProtocol(rawValue: 0)")
+    }
 }
