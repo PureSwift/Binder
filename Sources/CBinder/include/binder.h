@@ -12,7 +12,6 @@
 
 #include <android/api-level.h>
 #include <android/log.h>
-#include <android/binder.h>
 #include <android/looper.h>
 #include <android/choreographer.h>
 #include <android/native_activity.h>
