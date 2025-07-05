@@ -12,5 +12,8 @@ struct BinderTests {
     
     @Test func driverCommandProtocol() throws {
         #expect(DriverCommandProtocol.transaction == BC_TRANSACTION)
+        #expect(DriverCommandProtocol.transaction.rawValue == BC_TRANSACTION.rawValue)
+        #expect(DriverCommandProtocol.transaction.description == "BC_TRANSACTION")
+        #expect(DriverCommandProtocol(rawValue: 0).description == "DriverCommandProtocol(rawValue: 0)")
     }
 }
