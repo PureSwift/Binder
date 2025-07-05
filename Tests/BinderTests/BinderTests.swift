@@ -1,6 +1,13 @@
 import Testing
+import CBinder
 @testable import Binder
 
-@Test func example() async throws {
-    // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+@Suite
+struct BinderTests {
+    
+    @Test func binderType() async throws {
+        #expect(BinderType.binder.rawValue == BINDER_TYPE_BINDER)
+        #expect(BinderType(rawValue: UInt32(BINDER_TYPE_BINDER)) == .binder)
+    }
 }
+
