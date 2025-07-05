@@ -34,3 +34,60 @@ public extension DriverCommandProtocol {
     static var clearFreezeNotification: DriverCommandProtocol { BC_CLEAR_FREEZE_NOTIFICATION }
     static var freezeNotificationDone: DriverCommandProtocol { BC_FREEZE_NOTIFICATION_DONE }
 }
+
+// MARK: - CustomStringConvertible
+
+extension DriverCommandProtocol: @retroactive CustomStringConvertible {
+    
+    public var description: String {
+        switch self {
+        case .transaction:
+            return "BC_TRANSACTION"
+        case .reply:
+            return "BC_REPLY"
+        case .acquireResult:
+            return "BC_ACQUIRE_RESULT"
+        case .freeBuffer:
+            return "BC_FREE_BUFFER"
+        case .incRefs:
+            return "BC_INCREFS"
+        case .acquire:
+            return "BC_ACQUIRE"
+        case .release:
+            return "BC_RELEASE"
+        case .decRefs:
+            return "BC_DECREFS"
+        case .incRefsDone:
+            return "BC_INCREFS_DONE"
+        case .acquireDone:
+            return "BC_ACQUIRE_DONE"
+        case .attemptAcquire:
+            return "BC_ATTEMPT_ACQUIRE"
+        case .registerLooper:
+            return "BC_REGISTER_LOOPER"
+        case .enterLooper:
+            return "BC_ENTER_LOOPER"
+        case .exitLooper:
+            return "BC_EXIT_LOOPER"
+        case .requestDeathNotification:
+            return "BC_REQUEST_DEATH_NOTIFICATION"
+        case .clearDeathNotification:
+            return "BC_CLEAR_DEATH_NOTIFICATION"
+        case .deadBinderDone:
+            return "BC_DEAD_BINDER_DONE"
+        case .transactionSg:
+            return "BC_TRANSACTION_SG"
+        case .replySg:
+            return "BC_REPLY_SG"
+        case .requestFreezeNotification:
+            return "BC_REQUEST_FREEZE_NOTIFICATION"
+        case .clearFreezeNotification:
+            return "BC_CLEAR_FREEZE_NOTIFICATION"
+        case .freezeNotificationDone:
+            return "BC_FREEZE_NOTIFICATION_DONE"
+        default:
+            return "DriverCommandProtocol(rawValue: \(rawValue))"
+        }
+    }
+
+}
