@@ -30,9 +30,11 @@ public extension DriverCommandProtocol {
     static var deadBinderDone: DriverCommandProtocol { BC_DEAD_BINDER_DONE }
     static var transactionSg: DriverCommandProtocol { BC_TRANSACTION_SG }
     static var replySg: DriverCommandProtocol { BC_REPLY_SG }
-    static var requestFreezeNotification: DriverCommandProtocol { BC_REQUEST_FREEZE_NOTIFICATION }
-    static var clearFreezeNotification: DriverCommandProtocol { BC_CLEAR_FREEZE_NOTIFICATION }
-    static var freezeNotificationDone: DriverCommandProtocol { BC_FREEZE_NOTIFICATION_DONE }
+
+    // newer API
+    //static var requestFreezeNotification: DriverCommandProtocol { BC_REQUEST_FREEZE_NOTIFICATION }
+    //static var clearFreezeNotification: DriverCommandProtocol { BC_CLEAR_FREEZE_NOTIFICATION }
+    //static var freezeNotificationDone: DriverCommandProtocol { BC_FREEZE_NOTIFICATION_DONE }
 }
 
 // MARK: - CustomStringConvertible
@@ -78,13 +80,13 @@ extension DriverCommandProtocol: @retroactive CustomStringConvertible {
         case .transactionSg:
             return "BC_TRANSACTION_SG"
         case .replySg:
-            return "BC_REPLY_SG"
+            return "BC_REPLY_SG"/*
         case .requestFreezeNotification:
             return "BC_REQUEST_FREEZE_NOTIFICATION"
         case .clearFreezeNotification:
             return "BC_CLEAR_FREEZE_NOTIFICATION"
         case .freezeNotificationDone:
-            return "BC_FREEZE_NOTIFICATION_DONE"
+            return "BC_FREEZE_NOTIFICATION_DONE"*/
         default:
             return "DriverCommandProtocol(rawValue: \(rawValue))"
         }

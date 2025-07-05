@@ -33,8 +33,10 @@ public extension DriverReturnProtocol {
     static var frozenReply: DriverReturnProtocol { BR_FROZEN_REPLY }
     static var onewaySpamSuspect: DriverReturnProtocol { BR_ONEWAY_SPAM_SUSPECT }
     static var transactionPendingFrozen: DriverReturnProtocol { BR_TRANSACTION_PENDING_FROZEN }
-    static var frozenBinder: DriverReturnProtocol { BR_FROZEN_BINDER }
-    static var clearFreezeNotificationDone: DriverReturnProtocol { BR_CLEAR_FREEZE_NOTIFICATION_DONE }
+
+    // Newer API
+    //static var frozenBinder: DriverReturnProtocol { BR_FROZEN_BINDER }
+    //static var clearFreezeNotificationDone: DriverReturnProtocol { BR_CLEAR_FREEZE_NOTIFICATION_DONE }
 }
 
 extension DriverReturnProtocol: @retroactive CustomStringConvertible {
@@ -63,8 +65,8 @@ extension DriverReturnProtocol: @retroactive CustomStringConvertible {
         case .frozenReply: return "BR_FROZEN_REPLY"
         case .onewaySpamSuspect: return "BR_ONEWAY_SPAM_SUSPECT"
         case .transactionPendingFrozen: return "BR_TRANSACTION_PENDING_FROZEN"
-        case .frozenBinder: return "BR_FROZEN_BINDER"
-        case .clearFreezeNotificationDone: return "BR_CLEAR_FREEZE_NOTIFICATION_DONE"
+        //case .frozenBinder: return "BR_FROZEN_BINDER"
+        //case .clearFreezeNotificationDone: return "BR_CLEAR_FREEZE_NOTIFICATION_DONE"
         default:
             return "DriverReturnProtocol(rawValue: \(rawValue))"
         }
