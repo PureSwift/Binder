@@ -5,6 +5,7 @@
 //  Created by Alsey Coleman Miller on 7/5/25.
 //
 
+import Socket
 import CBinder
 
 /// Android Binder Type
@@ -19,33 +20,37 @@ public enum BinderType: Equatable, Hashable, Sendable, CaseIterable {
     case ptr
 }
 
+// MARK: - IOControlID
+
+extension BinderType: IOControlID { }
+
 // MARK: - RawRepresentable
 
 extension BinderType: RawRepresentable {
     
-    public init?(rawValue: UInt32) {
+    public init?(rawValue: CUnsignedLong) {
         guard let value = Self.allCases.first(where: { $0.rawValue == rawValue }) else {
             return nil
         }
         self = value
     }
     
-    public var rawValue: UInt32 {
+    public var rawValue: CUnsignedLong {
         switch self {
         case .binder:
-            UInt32(BINDER_TYPE_BINDER)
+            RawValue(BINDER_TYPE_BINDER)
         case .weakBinder:
-            UInt32(BINDER_TYPE_WEAK_BINDER)
+            RawValue(BINDER_TYPE_WEAK_BINDER)
         case .handle:
-            UInt32(BINDER_TYPE_HANDLE)
+            RawValue(BINDER_TYPE_HANDLE)
         case .weakHandle:
-            UInt32(BINDER_TYPE_WEAK_HANDLE)
+            RawValue(BINDER_TYPE_WEAK_HANDLE)
         case .fd:
-            UInt32(BINDER_TYPE_FD)
+            RawValue(BINDER_TYPE_FD)
         case .fda:
-            UInt32(BINDER_TYPE_FDA)
+            RawValue(BINDER_TYPE_FDA)
         case .ptr:
-            UInt32(BINDER_TYPE_PTR)
+            RawValue(BINDER_TYPE_PTR)
         }
     }
 }
@@ -55,6 +60,6 @@ extension BinderType: RawRepresentable {
 public extension binder_object_header {
     
     init(type: BinderType) {
-        self.init(type: type.rawValue)
+        self.init(type: numericCast(type.rawValue))
     }
 }
