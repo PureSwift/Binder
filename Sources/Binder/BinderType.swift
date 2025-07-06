@@ -20,10 +20,6 @@ public enum BinderType: Equatable, Hashable, Sendable, CaseIterable {
     case ptr
 }
 
-// MARK: - IOControlID
-
-extension BinderType: IOControlID { }
-
 // MARK: - RawRepresentable
 
 extension BinderType: RawRepresentable {
