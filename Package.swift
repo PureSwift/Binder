@@ -49,7 +49,10 @@ let package = Package(
         ),
         .testTarget(
             name: "BinderTests",
-            dependencies: ["Binder"]
+            dependencies: ["Binder"],
+            swiftSettings: [
+                .define("ENABLE_MOCKING", .when(platforms: [.macOS]))
+            ]
         )
     ]
 )

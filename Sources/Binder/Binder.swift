@@ -7,23 +7,32 @@ import CBinder
 /// Maintains an open connection.
 public struct Binder: ~Copyable {
     
-    let handle: Handle
+    internal let handle: Handle
     
     /// Opens a connection to a Binder device.
     public init(
         path: String = Binder.path,
         isReadOnly: Bool = false
     ) throws(Errno) {
-        self.handle = try .open(path, isReadOnly: isReadOnly)
+        let handle = try Handle.open(path, isReadOnly: isReadOnly)
+        self.init(handle: handle)
+    }
+    
+    internal init(handle: Handle) {
+        self.handle = handle
     }
     
     deinit {
+        #if ENABLE_MOCKING
+        assert(handle.fileDescriptor.rawValue == 0, "Not mock device")
+        #else
         do {
             try handle.close()
         }
         catch {
             assertionFailure("Unable to close Binder device: \(error)")
         }
+        #endif
     }
 }
 
@@ -61,3 +70,23 @@ extension Binder.Handle {
         try fileDescriptor.close()
     }
 }
+
+// MARK: - Mock
+
+#if ENABLE_MOCKING
+
+internal extension Binder {
+    
+    static var mock: Binder {
+        Binder(handle: .mock)
+    }
+}
+
+internal extension Binder.Handle {
+    
+    static var mock: Binder.Handle {
+        .init(fileDescriptor: SocketDescriptor(rawValue: 0))
+    }
+}
+
+#endif

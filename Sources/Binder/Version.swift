@@ -119,3 +119,24 @@ extension Binder.Handle {
         return version
     }
 }
+
+// MARK: - Mock
+
+extension BinderVersion {
+    
+    nonisolated(unsafe) static var mock: BinderVersion = .compiledVersion
+}
+
+internal extension Binder.Handle {
+    
+    func inputOutput(_ value: inout BinderVersion) throws(Errno) {
+        assert(value == BinderVersion(), "BinderVersion already initialized: \(value)")
+        #if ENABLE_MOCKING
+        assert(type(of: value).id == .version)
+        assert(type(of: value).id.rawValue == BINDER_VERSION)
+        value = BinderVersion.mock
+        #else
+        try fileDescriptor.inputOutput(&value)
+        #endif
+    }
+}
