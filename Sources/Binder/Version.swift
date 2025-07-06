@@ -11,6 +11,38 @@ import CBinder
 
 public typealias BinderVersion = binder_version
 
+// MARK: - Properties
+
+public extension BinderVersion {
+    
+    /// Binder Protocol Version in NDK headers
+    static var compiledVersion: BinderVersion {
+        return .init(rawValue: BINDER_CURRENT_PROTOCOL_VERSION)
+    }
+    
+    /// Read current Binder version from device.
+    static var current: BinderVersion {
+        get throws(Errno) {
+            try Self.read()
+        }
+    }
+}
+
+// MARK: - Methods
+
+public extension BinderVersion {
+    
+    static func read(
+        _ path: String = Binder.path
+    ) throws(Errno) -> BinderVersion {
+        let device = try Binder(
+            path: path,
+            isReadOnly: true
+        )
+        return try device.version
+    }
+}
+
 // MARK: - RawRepresentable
 
 extension BinderVersion: @retroactive RawRepresentable {
@@ -52,39 +84,7 @@ extension BinderVersion: @retroactive Hashable {
     }
 }
 
-// MARK: - IOCTL
-
-public extension BinderVersion {
-    
-    /// Binder Protocol Version in NDK headers
-    static var compiledVersion: BinderVersion {
-        return .init(rawValue: BINDER_CURRENT_PROTOCOL_VERSION)
-    }
-    
-    /// Read current Binder version from device.
-    static var current: BinderVersion {
-        get throws(Errno) {
-            #if canImport(Darwin)
-            compiledVersion
-            #else
-            try Self.read()
-            #endif
-        }
-    }
-}
-
-public extension BinderVersion {
-    
-    static func read(
-        _ path: String = Binder.path
-    ) throws(Errno) -> BinderVersion {
-        let device = try Binder(
-            path: path,
-            isReadOnly: true
-        )
-        return try device.version
-    }
-}
+// MARK: - IOControlValue
 
 extension BinderVersion: @retroactive IOControlValue {
     
@@ -94,5 +94,28 @@ extension BinderVersion: @retroactive IOControlValue {
         try Swift.withUnsafeMutableBytes(of: &self) { buffer in
             try body(buffer.baseAddress!)
         }
+    }
+}
+
+// MARK: - Extensions
+
+public extension Binder {
+    
+    /// Read the binder version.
+    var version: BinderVersion {
+        get throws(Errno) {
+            try handle.readVersion()
+        }
+    }
+}
+
+extension Binder.Handle {
+    
+    /// Read the binder version.
+    func readVersion() throws(Errno) -> BinderVersion {
+        var version = BinderVersion()
+        try inputOutput(&version)
+        assert(version.rawValue != 0)
+        return version
     }
 }

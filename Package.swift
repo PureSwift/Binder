@@ -38,6 +38,9 @@ let package = Package(
                     name: "Socket",
                     package: "Socket"
                 )
+            ],
+            swiftSettings: [
+                .define("ENABLE_MOCKING", .when(platforms: [.macOS]))
             ]
         ),
         .target(

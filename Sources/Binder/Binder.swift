@@ -33,12 +33,6 @@ public extension Binder {
     static var path: String {
         "/dev/binder"
     }
-    
-    var version: BinderVersion {
-        get throws(Errno) {
-            try handle.readVersion()
-        }
-    }
 }
 
 internal extension Binder {
@@ -65,13 +59,5 @@ extension Binder.Handle {
     
     consuming func close() throws(Errno) {
         try fileDescriptor.close()
-    }
-    
-    /// Read the binder version.
-    func readVersion() throws(Errno) -> BinderVersion {
-        var version = BinderVersion()
-        try fileDescriptor.inputOutput(&version)
-        assert(version.rawValue != 0)
-        return version
     }
 }
