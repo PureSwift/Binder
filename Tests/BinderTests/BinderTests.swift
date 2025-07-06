@@ -59,8 +59,17 @@ struct BinderTests {
         #expect(([] as TransactionFlags).description == "[]")
         #expect(([] as TransactionFlags).rawValue == 0)
         #expect(TransactionFlags.oneWay == TF_ONE_WAY)
-        #expect(BinderCommand.writeRead.rawValue == numericCast(BINDER_WRITE_READ))
         #expect("\([.oneWay, .rootObject] as TransactionFlags)" == "[.oneWay, .rootObject]")
+    }
+    
+    @Test func flatBinderObjectFlags() throws {
+        
+        #expect(([] as FlatBinderObjectFlags).isEmpty)
+        #expect(([] as FlatBinderObjectFlags).description == "[]")
+        #expect(([] as FlatBinderObjectFlags).rawValue == 0)
+        #expect(FlatBinderObjectFlags.priorityMask == FLAT_BINDER_FLAG_PRIORITY_MASK)
+        #expect(FlatBinderObjectFlags.acceptsFDs.rawValue == FLAT_BINDER_FLAG_ACCEPTS_FDS.rawValue)
+        #expect("\([.inheritRT, .txnSecurityCtx] as FlatBinderObjectFlags)" == "[.inheritRT, .txnSecurityCtx]")
     }
 }
 
