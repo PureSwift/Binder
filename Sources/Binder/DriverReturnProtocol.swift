@@ -7,6 +7,7 @@
 
 import CBinder
 
+/// Binder Return Protocol
 public typealias DriverReturnProtocol = binder_driver_return_protocol
 
 public extension DriverReturnProtocol {
