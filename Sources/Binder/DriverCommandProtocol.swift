@@ -7,6 +7,7 @@
 
 import CBinder
 
+/// Binder Command Protocol 
 public typealias DriverCommandProtocol = binder_driver_command_protocol
 
 public extension DriverCommandProtocol {
