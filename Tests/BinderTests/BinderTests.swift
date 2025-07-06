@@ -5,7 +5,7 @@ import CBinder
 @Suite
 struct BinderTests {
     
-    @Test func readBinderVersion() throws {
+    @Test func version() throws {
         let version = try BinderVersion.current
         print("Binder version:", version)
         #expect(version == BinderVersion.compiledVersion)
