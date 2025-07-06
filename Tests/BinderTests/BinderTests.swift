@@ -5,12 +5,11 @@ import CBinder
 @Suite
 struct BinderTests {
     
-    #if os(Android) || os(Linux)
     @Test func readBinderVersion() throws {
         let version = try BinderVersion.current
         print("Binder version:", version)
+        #expect(version == BinderVersion.compiledVersion)
     }
-    #endif
     
     @Test func binderType() throws {
         #expect(BinderType.binder.rawValue == BINDER_TYPE_BINDER)
