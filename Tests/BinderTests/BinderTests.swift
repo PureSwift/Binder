@@ -1,3 +1,4 @@
+import SystemPackage
 import Testing
 import CBinder
 @testable import Binder
@@ -5,8 +6,20 @@ import CBinder
 @Suite
 struct BinderTests {
     
+    @Test func device() throws {
+        let device = try openDevice()
+        #if ENABLE_MOCKING
+        #expect(device.handle.fileDescriptor.rawValue == 0)
+        #endif
+    }
+    
     @Test func version() throws {
+        #if ENABLE_MOCKING
+        let device = try openDevice() // open mock device
+        let version = try device.version
+        #else
         let version = try BinderVersion.current
+        #endif
         print("Binder version:", version)
         #expect(version == BinderVersion.compiledVersion)
     }
@@ -48,5 +61,16 @@ struct BinderTests {
         #expect(TransactionFlags.oneWay == TF_ONE_WAY)
         #expect(BinderCommand.writeRead.rawValue == numericCast(BINDER_WRITE_READ))
         #expect("\([.oneWay, .rootObject] as TransactionFlags)" == "[.oneWay, .rootObject]")
+    }
+}
+
+private extension BinderTests {
+    
+    func openDevice(path: String = Binder.path, isReadOnly: Bool = false) throws(Errno) -> Binder {
+        #if ENABLE_MOCKING
+        .mock
+        #else
+        try Binder(path: path, isReadOnly: isReadOnly)
+        #endif
     }
 }
