@@ -16,6 +16,7 @@ public typealias BinderVersion = binder_version
 extension BinderVersion: @retroactive RawRepresentable {
     
     public init(rawValue: Int32) {
+        assert(rawValue != 0)
         self.init(protocol_version: rawValue)
     }
     
@@ -55,38 +56,39 @@ extension BinderVersion: @retroactive Hashable {
 
 public extension BinderVersion {
     
+    /// Binder Protocol Version in NDK headers
+    static var compiledVersion: BinderVersion {
+        return .init(rawValue: BINDER_CURRENT_PROTOCOL_VERSION)
+    }
+    
+    /// Read current Binder version from device.
     static var current: BinderVersion {
         get throws(Errno) {
+            #if canImport(Darwin)
+            compiledVersion
+            #else
             try Self.read()
+            #endif
         }
     }
 }
 
-internal extension BinderVersion {
+public extension BinderVersion {
     
-    static func read() throws(Errno) -> BinderVersion {
-        // Open /dev/binder using SystemPackage
-        let fileDescriptor: SocketDescriptor
-        do {
-            let fd = try FileDescriptor.open("/dev/binder", .readOnly)
-            fileDescriptor = SocketDescriptor(rawValue: fd.rawValue)
-        }
-        catch {
-            throw error as! Errno
-        }
-        // Ensure cleanup
-        return try fileDescriptor.closeAfter { () throws(Errno) -> (BinderVersion) in
-            var version = BinderVersion()
-            //try fd.ioctl(raw: CUnsignedLong(BINDER_VERSION), mutablePointer: &version)
-            try fileDescriptor.inputOutput(&version)
-            return version
-        }
+    static func read(
+        _ path: String = Binder.path
+    ) throws(Errno) -> BinderVersion {
+        let device = try Binder(
+            path: path,
+            isReadOnly: true
+        )
+        return try device.version
     }
 }
 
 extension BinderVersion: @retroactive IOControlValue {
     
-    public static var id: BinderType { .binder }
+    public static var id: BinderCommand { .version }
     
     public mutating func withUnsafeMutablePointer<Result>(_ body: (UnsafeMutableRawPointer) throws -> (Result)) rethrows -> Result {
         try Swift.withUnsafeMutableBytes(of: &self) { buffer in
