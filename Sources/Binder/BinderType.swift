@@ -11,13 +11,24 @@ import CBinder
 /// Android Binder Type
 public enum BinderType: Equatable, Hashable, Sendable, CaseIterable {
     
+    /// A Node
     case binder
+    
     case weakBinder
+    
+    /// A Handle, A reference to a Node
     case handle
+    
     case weakHandle
-    case fd
-    case fda
-    case ptr
+    
+    /// A file descriptor
+    case fileDescriptor
+    
+    /// An array of file descriptors
+    case fileDescriptorArray
+    
+    /// A pointer to a memory buffer used for transferring data
+    case pointer
 }
 
 // MARK: - RawRepresentable
@@ -41,11 +52,11 @@ extension BinderType: RawRepresentable {
             RawValue(BINDER_TYPE_HANDLE)
         case .weakHandle:
             RawValue(BINDER_TYPE_WEAK_HANDLE)
-        case .fd:
+        case .fileDescriptor:
             RawValue(BINDER_TYPE_FD)
-        case .fda:
+        case .fileDescriptorArray:
             RawValue(BINDER_TYPE_FDA)
-        case .ptr:
+        case .pointer:
             RawValue(BINDER_TYPE_PTR)
         }
     }
