@@ -35,14 +35,16 @@ public enum BinderType: Equatable, Hashable, Sendable, CaseIterable {
 
 extension BinderType: RawRepresentable {
     
-    public init?(rawValue: CInterop.IOControlID) {
+    public typealias RawValue = CUnsignedInt
+    
+    public init?(rawValue: RawValue) {
         guard let value = Self.allCases.first(where: { $0.rawValue == rawValue }) else {
             return nil
         }
         self = value
     }
     
-    public var rawValue: CInterop.IOControlID {
+    public var rawValue: RawValue {
         switch self {
         case .binder:
             RawValue(BINDER_TYPE_BINDER)
@@ -67,6 +69,6 @@ extension BinderType: RawRepresentable {
 public extension binder_object_header {
     
     init(type: BinderType) {
-        self.init(type: numericCast(type.rawValue))
+        self.init(type: type.rawValue)
     }
 }
