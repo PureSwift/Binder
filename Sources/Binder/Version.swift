@@ -37,7 +37,7 @@ public extension BinderVersion {
     ) throws(Errno) -> BinderVersion {
         let device = try Binder(
             path: path,
-            isReadOnly: true
+            mode: .readOnly
         )
         return try device.version
     }
