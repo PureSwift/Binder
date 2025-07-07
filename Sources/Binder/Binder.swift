@@ -12,9 +12,9 @@ public struct Binder: ~Copyable {
     /// Opens a connection to a Binder device.
     public init(
         path: String = Binder.path,
-        isReadOnly: Bool = false
+        mode: FileDescriptor.AccessMode = .readWrite
     ) throws(Errno) {
-        let handle = try Handle.open(path, isReadOnly: isReadOnly)
+        let handle = try Handle.open(path, mode: mode)
         self.init(handle: handle)
     }
     
@@ -48,22 +48,35 @@ internal extension Binder {
     
     struct Handle {
         
-        let fileDescriptor: SocketDescriptor
+        internal let fileDescriptor: SocketDescriptor
+        
+        private init(_ fileDescriptor: SocketDescriptor) {
+            self.fileDescriptor = fileDescriptor
+        }
     }
 }
 
 extension Binder.Handle {
     
-    static func open(_ path: String = Binder.path, isReadOnly: Bool) throws(Errno) -> Binder.Handle {
+    static func open(
+        _ path: String = Binder.path,
+        mode: FileDescriptor.AccessMode = .readWrite
+    ) throws(Errno) -> Binder.Handle {
+        let fileDescriptor: SocketDescriptor
+        #if ENABLE_MOCKING
+        fileDescriptor = Binder.Handle.mock.fileDescriptor
+        #else
         // Open /dev/binder using SystemPackage
         do {
-            let fd = try FileDescriptor.open(path, .readOnly)
-            let fileDescriptor = SocketDescriptor(rawValue: fd.rawValue)
-            return Binder.Handle(fileDescriptor: fileDescriptor)
+            let fd = try FileDescriptor.open(path, mode)
+            fileDescriptor = SocketDescriptor(rawValue: fd.rawValue)
+
         }
         catch {
             throw error as! Errno
         }
+        #endif
+        return Binder.Handle(fileDescriptor)
     }
     
     consuming func close() throws(Errno) {
@@ -85,7 +98,7 @@ internal extension Binder {
 internal extension Binder.Handle {
     
     static var mock: Binder.Handle {
-        .init(fileDescriptor: SocketDescriptor(rawValue: 0))
+        .init(SocketDescriptor(rawValue: 0))
     }
 }
 
