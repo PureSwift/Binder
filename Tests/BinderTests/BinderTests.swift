@@ -7,19 +7,14 @@ import CBinder
 struct BinderTests {
     
     @Test func device() throws {
-        let device = try openDevice()
+        let device = try Binder()
         #if ENABLE_MOCKING
         #expect(device.handle.fileDescriptor.rawValue == 0)
         #endif
     }
     
     @Test func version() throws {
-        #if ENABLE_MOCKING
-        let device = try openDevice() // open mock device
-        let version = try device.version
-        #else
         let version = try BinderVersion.current
-        #endif
         print("Binder version:", version)
         #expect(version == BinderVersion.compiledVersion)
     }
@@ -70,16 +65,5 @@ struct BinderTests {
         #expect(FlatBinderObjectFlags.priorityMask == FLAT_BINDER_FLAG_PRIORITY_MASK)
         #expect(FlatBinderObjectFlags.acceptsFDs.rawValue == FLAT_BINDER_FLAG_ACCEPTS_FDS.rawValue)
         #expect("\([.inheritRT, .txnSecurityCtx] as FlatBinderObjectFlags)" == "[.inheritRT, .txnSecurityCtx]")
-    }
-}
-
-private extension BinderTests {
-    
-    func openDevice(path: String = Binder.path, isReadOnly: Bool = false) throws(Errno) -> Binder {
-        #if ENABLE_MOCKING
-        .mock
-        #else
-        try Binder(path: path, isReadOnly: isReadOnly)
-        #endif
     }
 }
