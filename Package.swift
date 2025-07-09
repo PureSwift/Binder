@@ -1,5 +1,10 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import class Foundation.ProcessInfo
+
+// force building as dynamic library
+let dynamicLibrary = ProcessInfo.processInfo.environment["SWIFT_BUILD_DYNAMIC_LIBRARY"] != nil
+let libraryType: PackageDescription.Product.Library.LibraryType? = dynamicLibrary ? .dynamic : nil
 
 let package = Package(
     name: "Binder",
@@ -12,13 +17,14 @@ let package = Package(
     products: [
         .library(
             name: "Binder",
+            type: libraryType,
             targets: ["Binder"]
         )
     ],
     dependencies: [
         .package(
             url: "https://github.com/apple/swift-system",
-            from: "1.4.0"
+            from: "1.5.0"
         ),
         .package(
             url: "https://github.com/PureSwift/Socket",
