@@ -3,6 +3,7 @@
 //  Binder
 //
 
+import Dispatch
 import SystemPackage
 import Socket
 import CBinder
@@ -22,9 +23,20 @@ import CBinder
 /// 4. `mmap` the receive buffer
 ///
 /// Keeping the two apart means ``BinderVersion/read(_:)`` does not have to map
-/// a megabyte of address space to answer one ioctl, and it means a value of
-/// this type cannot exist without a buffer behind it.
-public struct BinderConnection: ~Copyable {
+/// a megabyte of address space to answer one ioctl.
+///
+/// ## Why a class
+///
+/// A connection is shared, not copied: several tasks transact over one device,
+/// and the driver is built for exactly that — concurrent ioctls from different
+/// threads are the normal case, which is what its thread pool is for. Reference
+/// semantics also make the resources' lifetime unambiguous, since the file
+/// descriptor and the mapping are released when the last user lets go.
+///
+/// It has to be a class for a second reason: ``transact(handle:code:request:flags:)``
+/// blocks, so the async form has to hand the work to another thread through an
+/// escaping closure, and a non-copyable value cannot be captured by one.
+public final class BinderConnection {
 
     /// The open device.
     internal let device: Binder
@@ -35,6 +47,14 @@ public struct BinderConnection: ~Copyable {
     /// pointers a transaction hands back point into it, and unmapping it while
     /// a reply is outstanding invalidates them.
     internal let buffer: MappedBuffer
+
+    /// Where blocking ioctls run when called from an async context.
+    ///
+    /// Concurrent, not serial: two transactions to different services have no
+    /// reason to queue behind one another, and a synchronous binder call parks
+    /// its thread until the peer answers — so serialising here would let one
+    /// slow service stall every other call on the connection.
+    internal let queue: DispatchQueue
 
     /// The receive-buffer size libbinder maps, and therefore the size services
     /// on the other end are provisioned to expect.
@@ -84,8 +104,20 @@ public struct BinderConnection: ~Copyable {
 
         self.device = device
         self.buffer = buffer
+        self.queue = DispatchQueue(
+            label: "org.pureswift.Binder.\(path)",
+            qos: .userInitiated,
+            attributes: .concurrent
+        )
     }
 }
+
+// The stored properties are established at init and never mutated: a file
+// descriptor, a mapping's address and length, and a queue. Everything a
+// transaction touches beyond those is local to the call. The driver is designed
+// for concurrent ioctls from several threads, so sharing a connection across
+// tasks is the intended use rather than something to be guarded against.
+extension BinderConnection: @unchecked Sendable {}
 
 public extension BinderConnection {
 
