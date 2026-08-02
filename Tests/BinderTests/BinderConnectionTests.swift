@@ -1,0 +1,88 @@
+//
+//  BinderConnectionTests.swift
+//  Binder
+//
+
+import Testing
+
+@testable import Binder
+
+/// What can be checked about a connection without a binder device present.
+///
+/// Opening one requires a driver, so these are the properties that hold before
+/// any device is involved: the type's shape, and the constants a caller can
+/// read without connecting.
+@Suite
+struct BinderConnectionTests {
+
+    /// A connection is shared across tasks rather than copied into each, and
+    /// the async operations hand work to another thread through an escaping
+    /// closure. Both of those stop compiling if it goes back to being a
+    /// non-copyable value, so the requirement is pinned here rather than left
+    /// to be rediscovered.
+    @Test func connectionIsSendable() {
+        func requireSendable<T: Sendable>(_: T.Type) {}
+        requireSendable(BinderConnection.self)
+    }
+
+    @Test func exposesTheMappedBufferSize() {
+        #expect(BinderConnection.defaultBufferSize == MappedBuffer.defaultSize)
+        #expect(BinderConnection.defaultBufferSize > 0)
+    }
+
+    /// libbinder's DEFAULT_MAX_BINDER_THREADS. Services on the other end are
+    /// provisioned expecting it.
+    @Test func defaultMaxThreadsMatchesLibbinder() {
+        #expect(Binder.defaultMaxThreads == 15)
+    }
+
+    @Test func defaultPathIsTheBinderDevice() {
+        #expect(Binder.path == "/dev/binder")
+    }
+}
+
+/// Never called — it exists to be compiled.
+///
+/// Opening a connection needs a driver, so the async surface cannot be
+/// exercised at runtime here. What can still be checked is that it type-checks
+/// from a caller's position: that the async overloads are reachable, that their
+/// errors stay typed as `BinderError` rather than widening to `any Error`, and
+/// that a connection can be held across a suspension point without tripping
+/// sendability. Each of those has already broken once while this was being
+/// written.
+private func asyncSurfaceCompiles(_ connection: BinderConnection) async {
+    var request = Parcel()
+    request.appendInterfaceToken(ServiceManager.descriptor)
+    request.append("activity")
+
+    do {
+        _ = try await connection.service(named: "activity")
+        _ = try await connection.checkService(named: "activity")
+        _ = try await connection.services()
+        _ = try await connection.transact(handle: 0, code: 1, request: request)
+    } catch {
+        // Typed: if this ever widens to `any Error`, the pattern stops
+        // compiling and the async signatures have silently lost their type.
+        let typed: BinderError = error
+        _ = typed
+    }
+}
+
+/// Likewise for the synchronous surface, which the async one delegates to.
+///
+/// Adding async overloads with the same argument labels risks making the plain
+/// calls ambiguous; this fails to compile if that happens.
+private func syncSurfaceCompiles(_ connection: BinderConnection) {
+    var request = Parcel()
+    request.appendInterfaceToken(ServiceManager.descriptor)
+
+    do {
+        _ = try connection.service(named: "activity")
+        _ = try connection.checkService(named: "activity")
+        _ = try connection.services()
+        _ = try connection.transact(handle: 0, code: 1, request: request)
+    } catch {
+        let typed: BinderError = error
+        _ = typed
+    }
+}
