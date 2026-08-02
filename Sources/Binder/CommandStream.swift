@@ -49,6 +49,10 @@ public struct CommandStream: Equatable, Hashable, Sendable {
         self.bytes = []
     }
 
+    internal init(bytes: [UInt8]) {
+        self.bytes = bytes
+    }
+
     public var isEmpty: Bool {
         bytes.isEmpty
     }
