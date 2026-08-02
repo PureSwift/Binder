@@ -165,6 +165,14 @@ public enum ParcelError: Error, Equatable, Hashable, Sendable {
     /// Android treats this as a security event rather than a plain decode
     /// failure, because it means the length prefix and the payload disagree.
     case unterminatedString
+
+    /// The four-character RPC marker did not match the expected one.
+    ///
+    /// The two sides were built against different binder configurations —
+    /// system versus vendor versus off-Android. The callee rejects the whole
+    /// transaction on this, so it is worth reporting distinctly rather than as
+    /// a generic decode failure.
+    case interfaceMismatch(expected: Int32, found: Int32)
 }
 
 // MARK: - Reading
