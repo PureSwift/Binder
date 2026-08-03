@@ -35,10 +35,15 @@ jobs:
   linux:
     name: Linux
     strategy:
+      fail-fast: false
       matrix:
+        # x86_64 and native arm64. arm64 is the architecture Android and most
+        # binder targets actually run on, so testing there rather than only
+        # cross-compiling to it is worth a runner.
+        os: ["ubuntu-latest", "ubuntu-24.04-arm"]
         config: ["debug", "release"]
         options: ["", "SWIFT_BUILD_DYNAMIC_LIBRARY=1"]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     container: swift:6.3.3
     steps:
     - name: Checkout
