@@ -125,6 +125,11 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
             // Runs on a serving thread, hence @Sendable.
         }
         try connection.cancel(watch)
+
+        // Publishing a hosted object, and the manual thread-exit for a caller
+        // driving transactions from threads it owns.
+        try connection.addService(named: "com.example.thing", object: hosted)
+        try connection.exitThread()
     } catch {
         let typed: BinderError = error
         _ = typed
