@@ -4,6 +4,7 @@
 //
 
 import Dispatch
+import Synchronization
 import SystemPackage
 import Socket
 import CBinder
@@ -55,6 +56,16 @@ public final class BinderConnection {
     /// its thread until the peer answers — so serialising here would let one
     /// slow service stall every other call on the connection.
     internal let queue: DispatchQueue
+
+    /// The objects this connection hosts for other processes to call.
+    internal let localObjects = LocalObjectRegistry()
+
+    /// Whether a serving loop should keep going.
+    ///
+    /// Read by every serving thread and written by ``stopServing()``, which is
+    /// called from elsewhere by definition — a loop parked in an ioctl cannot
+    /// stop itself.
+    internal let isServing = Mutex<Bool>(false)
 
     /// The receive-buffer size libbinder maps, and therefore the size services
     /// on the other end are provisioned to expect.
