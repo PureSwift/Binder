@@ -12,7 +12,11 @@ import SystemPackage
 /// driver refused the transaction, the reply did not decode — and collapsing
 /// those into `Errno` would leave a caller unable to tell "retry later" from
 /// "this object is gone forever".
-public enum BinderError: Error, Equatable, Hashable, Sendable {
+// Equatable but not Hashable: the `unexpectedReturn` case carries a
+// `DriverReturnProtocol`, a C-imported type that auto-conforms to Hashable on
+// newer Swift but not on 6.0.x, so requiring Hashable here fails to build
+// there. Nothing hashes a BinderError, so Equatable is enough.
+public enum BinderError: Error, Equatable, Sendable {
 
     /// An ioctl or other system call failed.
     case system(Errno)
