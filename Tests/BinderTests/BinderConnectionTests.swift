@@ -146,6 +146,13 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         var withFd = Parcel()
         withFd.append(fileDescriptor: FileDescriptor(rawValue: 1))
         _ = try connection.lastError()
+
+        // A scatter-gather request: an inline header plus an out-of-line
+        // buffer, sent through the same transact entry point.
+        var sgRequest = Parcel()
+        sgRequest.appendInterfaceToken("android.hardware.foo@1.0::IFoo")
+        sgRequest.append(buffer: [0xAA, 0xBB])
+        _ = try connection.transact(with: object, code: 1, request: sgRequest)
     } catch {
         let typed: BinderError = error
         _ = typed
