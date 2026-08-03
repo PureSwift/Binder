@@ -58,6 +58,20 @@ internal extension BinderConnection {
             }
             return try dispatch(data)
 
+        case .transactionSecCtx:
+            // Delivered instead of BR_TRANSACTION when the target node was
+            // registered with FLAG_TXN_SECURITY_CTX. The structure is a plain
+            // binder_transaction_data with a security-context pointer appended,
+            // and the transaction sits at offset zero, so the same dispatch
+            // handles it once the trailing pointer is dropped. The context
+            // string itself is not surfaced yet; sender_pid and sender_euid,
+            // which a permission check actually needs, are already in the
+            // transaction.
+            guard let data = element.decode(as: binder_transaction_data_secctx.self) else {
+                throw BinderError.unexpectedReturn(element.command)
+            }
+            return try dispatch(data.transaction_data)
+
         case .incRefs:
             // BC_INCREFS_DONE answers BR_INCREFS.
             guard let cookie = element.decode(as: binder_ptr_cookie.self) else {
@@ -274,6 +288,11 @@ public extension BinderConnection {
             var exit = CommandStream()
             exit.append(.exitLooper)
             try? send(exit)
+            // Release the driver's per-thread state now that this thread is
+            // leaving binder. BC_EXIT_LOOPER only tells the driver to stop
+            // delivering transactions here; the binder_thread itself lives
+            // until BINDER_THREAD_EXIT or device close.
+            try? exitThread()
         }
 
         let readBuffer = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: 256)
