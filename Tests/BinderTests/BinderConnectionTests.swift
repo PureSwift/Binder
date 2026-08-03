@@ -66,6 +66,12 @@ private func asyncSurfaceCompiles(_ connection: BinderConnection) async {
         // with no handle unwrapping at the call site.
         if let service = try await connection.service(named: "activity") {
             _ = try await service.transact(code: 1, request: request)
+            // The async call helper returns a whole parcel; results come from
+            // resultReader(), the header already consumed.
+            let reply = try await service.call(1, interface: "com.example.IThing") {
+                $0.append("arg")
+            }
+            _ = reply.resultReader()
         }
     } catch {
         // Typed: if this ever widens to `any Error`, the pattern stops
@@ -153,6 +159,14 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         sgRequest.appendInterfaceToken("android.hardware.foo@1.0::IFoo")
         sgRequest.append(buffer: [0xAA, 0xBB])
         _ = try connection.transact(with: object, code: 1, request: sgRequest)
+
+        // The call helpers, which write the envelope so a method supplies only
+        // its code and arguments. Reading from the returned reader throws
+        // ParcelError and is exercised in CallTests, so it is kept out of this
+        // BinderError block.
+        let proxy = connection.adopt(object)
+        _ = try proxy.call(1, interface: "com.example.IThing") { $0.append("arg") }
+        try proxy.post(2, interface: "com.example.IThing") { $0.append(Int32(1)) }
     } catch {
         let typed: BinderError = error
         _ = typed
