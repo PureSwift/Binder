@@ -3,6 +3,7 @@
 //  Binder
 //
 
+import SystemPackage
 import Testing
 
 @testable import Binder
@@ -130,6 +131,21 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         // driving transactions from threads it owns.
         try connection.addService(named: "com.example.thing", object: hosted)
         try connection.exitThread()
+
+        // Weak references and promotion.
+        let strong = connection.adopt(object)
+        let weakRef = try strong.weak()
+        if let promoted = try weakRef.promote() {
+            _ = try promoted.transact(code: 1, request: request)
+        }
+        _ = try connection.weakReference(to: object)
+
+        // File-descriptor passing (writing does not throw) and the failure
+        // diagnostic. Reading an fd throws ParcelError and is exercised in
+        // FileDescriptorObjectTests, so it is kept out of this BinderError block.
+        var withFd = Parcel()
+        withFd.append(fileDescriptor: FileDescriptor(rawValue: 1))
+        _ = try connection.lastError()
     } catch {
         let typed: BinderError = error
         _ = typed
