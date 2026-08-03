@@ -35,6 +35,12 @@ jobs:
       run: swift --version
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
+    # The suite runs the whole protocol layer without a binder device: the
+    # two tests that need /dev/binder skip when it is absent, which it is on
+    # a CI runner. So Linux, the platform this library actually targets, now
+    # tests rather than only building.
+    - name: Test
+      run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
 
   android-arm:
       name: Android
