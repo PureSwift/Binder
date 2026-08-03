@@ -129,11 +129,11 @@ public extension BinderConnection {
         return object.map { adopt($0) }
     }
 
-    /// Register an object under a name.
+    /// Register a forwarded reference under a name.
     ///
-    /// - Note: this registers a reference to an object *someone else* hosts.
-    ///   Registering an object this process serves needs a local binder and a
-    ///   thread to answer on, neither of which exists yet.
+    /// This variant registers an object *someone else* hosts — re-registering
+    /// a service this process looked up, for instance. To publish an object
+    /// this process serves, use the ``LocalObject`` overload.
     func addService(
         named name: String,
         object: RemoteObject,
@@ -150,6 +150,41 @@ public extension BinderConnection {
         request.append(allowIsolated)
         request.append(dumpPriority.rawValue)
 
+        try finishAddService(request)
+    }
+
+    /// Publish an object this process hosts under a name.
+    ///
+    /// After this returns, any process can obtain the object by name and call
+    /// it — the registration itself is what first carries the node to the
+    /// driver, so nothing has to have been sent earlier. Calls are only
+    /// *answered* while a serving loop runs; register first and then serve,
+    /// since a caller that finds the service before the loop starts merely
+    /// blocks until it does rather than failing.
+    ///
+    /// The registration keeps the service manager holding a strong reference
+    /// to the object, so it stays callable regardless of what else this
+    /// process drops — until it is withdrawn or this process exits.
+    func addService(
+        named name: String,
+        object: LocalObject,
+        allowIsolated: Bool = false,
+        dumpPriority: ServiceManager.DumpPriority = .default,
+        header: RPCHeader = .system
+    ) throws(BinderError) {
+        var request = Parcel()
+        request.appendInterfaceToken(ServiceManager.descriptor, header: header)
+        request.append(name)
+        // Written as BINDER_TYPE_BINDER: the driver creates the node on first
+        // sight and hands the service manager a handle pointing back here.
+        request.append(object)
+        request.append(allowIsolated)
+        request.append(dumpPriority.rawValue)
+
+        try finishAddService(request)
+    }
+
+    private func finishAddService(_ request: Parcel) throws(BinderError) {
         let reply = try transact(
             with: .contextManager,
             code: ServiceManager.Transaction.addService.rawValue,
