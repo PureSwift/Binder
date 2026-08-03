@@ -253,6 +253,14 @@ public enum ParcelError: Error, Equatable, Hashable, Sendable {
     /// transaction on this, so it is worth reporting distinctly rather than as
     /// a generic decode failure.
     case interfaceMismatch(expected: Int32, found: Int32)
+
+    /// The caller named a different interface than the one being served.
+    ///
+    /// Distinct from ``interfaceMismatch(expected:found:)``, which is about the
+    /// build marker: this is the descriptor string itself disagreeing, meaning
+    /// the transaction was routed to an object that does not implement what the
+    /// caller asked for.
+    case wrongInterface(expected: String, found: String?)
 }
 
 // MARK: - Reading
