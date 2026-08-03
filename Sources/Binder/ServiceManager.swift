@@ -71,7 +71,7 @@ public extension BinderConnection {
     func service(
         named name: String,
         header: RPCHeader = .system
-    ) throws(BinderError) -> RemoteObject? {
+    ) throws(BinderError) -> RemoteProxy? {
         try lookUp(name, using: .getService, header: header)
     }
 
@@ -81,7 +81,7 @@ public extension BinderConnection {
     func checkService(
         named name: String,
         header: RPCHeader = .system
-    ) throws(BinderError) -> RemoteObject? {
+    ) throws(BinderError) -> RemoteProxy? {
         try lookUp(name, using: .checkService, header: header)
     }
 
@@ -89,13 +89,13 @@ public extension BinderConnection {
         _ name: String,
         using transaction: ServiceManager.Transaction,
         header: RPCHeader
-    ) throws(BinderError) -> RemoteObject? {
+    ) throws(BinderError) -> RemoteProxy? {
         var request = Parcel()
         request.appendInterfaceToken(ServiceManager.descriptor, header: header)
         request.append(name)
 
         let reply = try transact(
-            handle: RemoteObject.contextManager.handle,
+            with: .contextManager,
             code: transaction.rawValue,
             request: request
         )
@@ -116,28 +116,56 @@ public extension BinderConnection {
             throw BinderError.remoteException(exception)
         }
 
+        let object: RemoteObject?
         do {
-            return try reader.readObject()
+            object = try reader.readObject()
         } catch {
             throw BinderError.parcel(error)
         }
+
+        // The reply's objects already hold a strong reference, taken before the
+        // transaction buffer went back. Adopting it rather than acquiring again
+        // is what keeps the driver's count at one.
+        return object.map { adopt($0) }
     }
 
-    /// Register a service under a name.
+    /// Register an object under a name.
     ///
-    /// - Note: not usable yet. A registration has to carry the object being
-    ///   registered as a `flat_binder_object`, and the driver only translates
-    ///   one if the parcel declares its offset — which ``Parcel`` does not
-    ///   track. The encoding is correct; the transaction will be rejected.
-    ///   See ``BinderError/objectOffsetsUnsupported``.
+    /// - Note: this registers a reference to an object *someone else* hosts.
+    ///   Registering an object this process serves needs a local binder and a
+    ///   thread to answer on, neither of which exists yet.
     func addService(
         named name: String,
         object: RemoteObject,
         allowIsolated: Bool = false,
         dumpPriority: ServiceManager.DumpPriority = .default,
         header: RPCHeader = .system
-    ) throws(BinderError) -> Never {
-        throw BinderError.objectOffsetsUnsupported
+    ) throws(BinderError) {
+        var request = Parcel()
+        request.appendInterfaceToken(ServiceManager.descriptor, header: header)
+        request.append(name)
+        // Records the object's offset, which is what lets the driver rewrite
+        // the handle for the service manager's process.
+        request.append(object)
+        request.append(allowIsolated)
+        request.append(dumpPriority.rawValue)
+
+        let reply = try transact(
+            with: .contextManager,
+            code: ServiceManager.Transaction.addService.rawValue,
+            request: request
+        )
+
+        var reader = reply.reader()
+        let exception: Int32
+        do {
+            exception = try reader.readInt32()
+        } catch {
+            throw BinderError.parcel(error)
+        }
+        guard exception == 0 else {
+            throw BinderError.remoteException(exception)
+        }
     }
 
     /// List the names of every registered service.
@@ -153,7 +181,7 @@ public extension BinderConnection {
         request.append(priority.rawValue)
 
         let reply = try transact(
-            handle: RemoteObject.contextManager.handle,
+            with: .contextManager,
             code: ServiceManager.Transaction.listServices.rawValue,
             request: request
         )
