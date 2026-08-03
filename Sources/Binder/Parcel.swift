@@ -26,14 +26,32 @@ public struct Parcel: Equatable, Hashable, Sendable {
     /// The serialised bytes, including any trailing padding.
     public private(set) var bytes: [UInt8]
 
+    /// Where each `flat_binder_object` starts within ``bytes``.
+    ///
+    /// The driver cannot find binder objects by scanning — a payload is opaque
+    /// bytes to it, and a value that happens to look like an object header
+    /// would be indistinguishable from one. So a transaction carries an
+    /// explicit array of offsets, and the driver rewrites a handle only at the
+    /// positions named there. Anything not listed crosses as plain data, which
+    /// means an object written without recording its offset arrives as a
+    /// number that addresses something else in the receiving process.
+    public private(set) var objectOffsets: [Int]
+
     /// An empty parcel.
     public init() {
         self.bytes = []
+        self.objectOffsets = []
     }
 
     /// A parcel wrapping bytes already received from the driver.
     public init(bytes: [UInt8]) {
         self.bytes = bytes
+        self.objectOffsets = []
+    }
+
+    internal init(bytes: [UInt8], objectOffsets: [Int]) {
+        self.bytes = bytes
+        self.objectOffsets = objectOffsets
     }
 }
 
@@ -135,6 +153,14 @@ public extension Parcel {
     /// Append a null byte array, which is a length of `-1`.
     mutating func appendNullBytes() {
         append(Int32(-1))
+    }
+
+    /// Note that a binder object starts at the current end of the payload.
+    ///
+    /// Kept here rather than exposing the setter, so the offsets cannot drift
+    /// away from the bytes they describe.
+    internal mutating func recordObjectOffset() {
+        objectOffsets.append(bytes.count)
     }
 
     /// Zero-fill up to the next 4-byte boundary.
