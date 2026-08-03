@@ -34,6 +34,12 @@ internal enum IncomingAction {
     /// to acquire the object.
     case acknowledge(DriverCommandProtocol, binder_ptr_cookie)
 
+    /// A watched object's process has died and its handler has run.
+    ///
+    /// The driver keeps the death recipient alive until `BC_DEAD_BINDER_DONE`
+    /// arrives, so this must go back even though nothing is waiting on it.
+    case deathAcknowledged(binder_uintptr_t)
+
     /// Bookkeeping that needs no response.
     case ignore
 }
@@ -74,9 +80,26 @@ internal extension BinderConnection {
              .finished, .ok:
             return .ignore
 
-        case .deadBinder, .clearDeathNotificationDone:
-            // Death notifications are not implemented; the commands are
-            // consumed so the stream stays walkable.
+        case .deadBinder:
+            guard let cookie = element.decode(as: binder_uintptr_t.self) else {
+                throw BinderError.unexpectedReturn(element.command)
+            }
+            // The handler runs before the acknowledgement rather than after, so
+            // that a client which reacts by dropping its reference has already
+            // done so when the driver tears the recipient down.
+            //
+            // The registration is left in place: a cancel may be in flight, and
+            // BR_CLEAR_DEATH_NOTIFICATION_DONE is what actually retires it.
+            deaths.notification(for: UInt64(cookie))?.handler()
+            return .deathAcknowledged(cookie)
+
+        case .clearDeathNotificationDone:
+            guard let cookie = element.decode(as: binder_uintptr_t.self) else {
+                throw BinderError.unexpectedReturn(element.command)
+            }
+            // The driver has confirmed the cancel, so nothing further can
+            // arrive for this cookie and the record can go.
+            _ = deaths.remove(cookie: UInt64(cookie))
             return .ignore
 
         case .error:
@@ -153,6 +176,11 @@ internal extension BinderConnection {
         case .acknowledge(let command, let cookie):
             var commands = CommandStream()
             commands.append(command, payload: cookie)
+            try send(commands)
+
+        case .deathAcknowledged(let cookie):
+            var commands = CommandStream()
+            commands.append(.deadBinderDone, payload: cookie)
             try send(commands)
 
         case .reply(let parcel, let data):
