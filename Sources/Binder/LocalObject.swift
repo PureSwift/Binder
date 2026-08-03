@@ -104,7 +104,7 @@ internal final class LocalObjectRegistry: Sendable {
     }
 
     func remove(_ object: LocalObject) {
-        state.withLock { $0.objects.removeValue(forKey: object.id) }
+        state.withLock { _ = $0.objects.removeValue(forKey: object.id) }
     }
 
     var count: Int {
