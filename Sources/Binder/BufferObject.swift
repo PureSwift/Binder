@@ -43,7 +43,7 @@ public extension Parcel {
         (length + 7) & ~7
     }
 
-    /// Append an out-of-line buffer.
+    /// Append a top-level out-of-line buffer.
     ///
     /// The bytes are copied into the parcel's own keeping and sent as a
     /// separate region the receiver reads through the buffer object's offset.
@@ -51,19 +51,58 @@ public extension Parcel {
     /// driver processes it; the payload is recorded separately so the transaction
     /// path can stage it and fix up the pointer.
     ///
-    /// Only top-level buffers are supported — a buffer that is not itself
-    /// pointed at by another buffer. Nested buffers need the parent/parent_offset
-    /// fields, which are left zero here.
-    mutating func append(buffer bytes: [UInt8]) {
+    /// - Returns: the index of this buffer among the parcel's objects, for use
+    ///   as the `parent` of a nested buffer.
+    @discardableResult
+    mutating func append(buffer bytes: [UInt8]) -> Int {
+        appendBufferObject(bytes, parent: nil, parentOffset: 0)
+    }
+
+    /// Append a buffer whose pointer lives inside another buffer.
+    ///
+    /// This is how nested HIDL data is laid out: a `hidl_vec<hidl_string>` is a
+    /// top-level buffer of `hidl_string` structs, and each string's characters
+    /// are a child buffer whose pointer field sits *inside* that top-level
+    /// buffer. The driver relocates the child, then writes its new address into
+    /// the parent at `parentOffset` — so the parent's payload carries a
+    /// placeholder there, which the caller leaves room for.
+    ///
+    /// - Parameters:
+    ///   - bytes: the child payload.
+    ///   - parent: the object index returned by the parent's ``append(buffer:)``.
+    ///     Must refer to a buffer appended earlier; the driver rejects a parent
+    ///     index that is not a prior buffer object.
+    ///   - parentOffset: the byte offset within the parent's payload where the
+    ///     child's pointer belongs. Must leave room for an 8-byte pointer inside
+    ///     the parent.
+    mutating func append(buffer bytes: [UInt8], parent: Int, parentOffset: Int) {
+        _ = appendBufferObject(bytes, parent: parent, parentOffset: parentOffset)
+    }
+
+    private mutating func appendBufferObject(
+        _ bytes: [UInt8],
+        parent: Int?,
+        parentOffset: Int
+    ) -> Int {
+        // The index this object will occupy in the offsets array — what a child
+        // names as its parent.
+        let index = objectOffsets.count
+
         var object = binder_buffer_object()
         object.hdr = binder_object_header(type: .pointer)
-        object.flags = 0
         // Placeholder: the real address is written at send time, once the
         // payload has been staged somewhere that will not move.
         object.buffer = 0
         object.length = binder_size_t(bytes.count)
-        object.parent = 0
-        object.parent_offset = 0
+        if let parent {
+            object.flags = Parcel.bufferHasParent
+            object.parent = binder_size_t(parent)
+            object.parent_offset = binder_size_t(parentOffset)
+        } else {
+            object.flags = 0
+            object.parent = 0
+            object.parent_offset = 0
+        }
 
         // Recorded in both: the descriptor is an object the driver processes
         // (so it goes in the offsets array), and its payload is out of line (so
@@ -73,6 +112,7 @@ public extension Parcel {
         recordBuffer(at: self.bytes.count, payload: bytes)
         recordObjectOffset()
         append(bitPattern: object)
+        return index
     }
 
     /// Whether this parcel carries any out-of-line buffers, and so must be sent
