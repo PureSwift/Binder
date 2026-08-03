@@ -34,7 +34,7 @@ public extension BinderConnection {
     /// Send a transaction and suspend until the reply arrives.
     ///
     /// The async counterpart of
-    /// ``transact(handle:code:request:flags:)-(UInt32,UInt32,Parcel,TransactionFlags)``.
+    /// ``BinderConnection/transact(with:code:request:flags:)``.
     ///
     /// - Note: cancelling the surrounding task does not cancel the transaction.
     ///   Once the driver has taken it there is no way to withdraw it, and the
@@ -42,14 +42,14 @@ public extension BinderConnection {
     ///   buffer, since nothing would be left to hand it back with
     ///   `BC_FREE_BUFFER`.
     func transact(
-        handle: UInt32,
+        with target: RemoteObject,
         code: UInt32,
         request: Parcel,
         flags: TransactionFlags = .acceptFds
     ) async throws(BinderError) -> Parcel {
         try await detached { () throws(BinderError) -> Parcel in
             try self.transact(
-                handle: handle,
+                with: target,
                 code: code,
                 request: request,
                 flags: flags
@@ -64,8 +64,8 @@ public extension BinderConnection {
     func service(
         named name: String,
         header: RPCHeader = .system
-    ) async throws(BinderError) -> RemoteObject? {
-        try await detached { () throws(BinderError) -> RemoteObject? in
+    ) async throws(BinderError) -> RemoteProxy? {
+        try await detached { () throws(BinderError) -> RemoteProxy? in
             try self.service(named: name, header: header)
         }
     }
@@ -74,8 +74,8 @@ public extension BinderConnection {
     func checkService(
         named name: String,
         header: RPCHeader = .system
-    ) async throws(BinderError) -> RemoteObject? {
-        try await detached { () throws(BinderError) -> RemoteObject? in
+    ) async throws(BinderError) -> RemoteProxy? {
+        try await detached { () throws(BinderError) -> RemoteProxy? in
             try self.checkService(named: name, header: header)
         }
     }
