@@ -5,15 +5,37 @@ import CBinder
 
 @Suite
 struct BinderTests {
-    
-    @Test func device() throws {
+
+    /// Whether these tests can reach a binder device.
+    ///
+    /// Mocking is compiled in on macOS, so the device path is never touched
+    /// there. Everywhere else these two tests need a real driver, and a Linux
+    /// host without the binder module loaded has no /dev/binder — which is the
+    /// common case for a development machine and for CI. Reporting that as a
+    /// failure trains people to ignore a red suite; skipping says what is
+    /// actually true.
+    static var hasDevice: Bool {
+        #if ENABLE_MOCKING
+        return true
+        #else
+        guard let device = try? FileDescriptor.open(Binder.path, .readOnly) else {
+            return false
+        }
+        try? device.close()
+        return true
+        #endif
+    }
+
+    @Test(.enabled(if: BinderTests.hasDevice, "no binder device at \(Binder.path)"))
+    func device() throws {
         let device = try Binder()
         #if ENABLE_MOCKING
         #expect(device.handle.fileDescriptor.rawValue == 0)
         #endif
     }
-    
-    @Test func version() throws {
+
+    @Test(.enabled(if: BinderTests.hasDevice, "no binder device at \(Binder.path)"))
+    func version() throws {
         let version = try BinderVersion.current
         print("Binder version:", version)
         #expect(version == BinderVersion.compiledVersion)

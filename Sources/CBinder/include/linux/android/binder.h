@@ -6,7 +6,12 @@
  */
 #ifndef _UAPI_LINUX_BINDER_H
 #define _UAPI_LINUX_BINDER_H
-#if __linux__
+// Modified from the auto-generated original: the kernel-header include is
+// gated on a libc that actually ships them (glibc or Bionic), so musl - which
+// is __linux__ but has no <linux/types.h> - falls to the stdint path. The
+// enclosing Sources/CBinder/include/binder.h defines the __uN types and pulls
+// in the ioctl macros for that case.
+#if defined(__linux__) && (defined(__GLIBC__) || defined(__BIONIC__))
 #include <linux/types.h>
 #include <linux/ioctl.h>
 #else

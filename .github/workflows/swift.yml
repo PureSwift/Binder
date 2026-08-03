@@ -1,5 +1,10 @@
 name: Swift
 on: [push]
+
+env:
+  # The single toolchain the whole matrix builds against. Bump here.
+  SWIFT_VERSION: "6.3.3"
+
 jobs:
 
   macos:
@@ -12,22 +17,34 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    # The macos-15 runner's bundled Swift trails the pinned version, so the
+    # toolchain is installed rather than taken from Xcode. SwiftyLab/setup-swift
+    # resolves versions from swift.org dynamically via swiftly, so it can
+    # install a release the older swift-actions/setup-swift does not yet list.
+    - name: Install Swift ${{ env.SWIFT_VERSION }}
+      uses: SwiftyLab/setup-swift@latest
+      with:
+        swift-version: ${{ env.SWIFT_VERSION }}
     - name: Swift Version
       run: swift --version
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
     - name: Test
       run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
-  
+
   linux:
     name: Linux
     strategy:
+      fail-fast: false
       matrix:
-        container: ["swift:6.0.3", "swift:6.1.2"]
+        # x86_64 and native arm64. arm64 is the architecture Android and most
+        # binder targets actually run on, so testing there rather than only
+        # cross-compiling to it is worth a runner.
+        os: ["ubuntu-latest", "ubuntu-24.04-arm"]
         config: ["debug", "release"]
         options: ["", "SWIFT_BUILD_DYNAMIC_LIBRARY=1"]
-    runs-on: ubuntu-latest
-    container: ${{ matrix.container }}-jammy
+    runs-on: ${{ matrix.os }}
+    container: swift:6.3.3
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -35,20 +52,56 @@ jobs:
       run: swift --version
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
+    # The suite runs the whole protocol layer without a binder device: the
+    # two tests that need /dev/binder skip when it is absent, which it is on
+    # a CI runner. So Linux, the platform this library actually targets, now
+    # tests rather than only building.
+    - name: Test
+      run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
 
-  android-arm:
-      name: Android
-      strategy:
-        fail-fast: false
-        matrix:
-          swift: ['6.1', 'nightly-6.2']
-          arch: ["aarch64", "x86_64"]
-      runs-on: macos-15
-      timeout-minutes: 30
-      steps:
-        - uses: actions/checkout@v4
-        - name: "Build Swift Package for Android"
-          run: |
-              brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
-              skip android sdk install --version ${{ matrix.swift }}
-              ANDROID_NDK_ROOT="" skip android build --arch ${{ matrix.arch }}
+  android:
+    name: Android
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ["aarch64", "x86_64"]
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Build Swift Package for Android"
+        run: |
+            brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
+            skip android sdk install --version ${{ env.SWIFT_VERSION }}
+            ANDROID_NDK_ROOT="" skip android build --arch ${{ matrix.arch }}
+
+  # Cross-compile against Apple's Static Linux SDK, which is musl-based. This
+  # is what exercises the musl path in CBinder — the kernel uapi headers are
+  # absent from the musl sysroot, so the C shim falls back to defining the
+  # __uN types itself and taking the ioctl macros from <sys/ioctl.h>.
+  musl:
+    name: Linux (musl)
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ["aarch64", "x86_64"]
+    runs-on: ubuntu-latest
+    container: swift:6.3.3
+    env:
+      # The Static Linux SDK bundle for SWIFT_VERSION. The checksum is
+      # published in swift.org's releases.json and must be updated alongside
+      # SWIFT_VERSION — it is specific to the exact bundle.
+      STATIC_SDK_URL: "https://download.swift.org/swift-6.3.3-release/static-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_static-linux-0.1.0.artifactbundle.tar.gz"
+      STATIC_SDK_CHECKSUM: "87c3eaf908e67c0e13a84367119e12273cec1d2cd3d81f7d74bb36722d6b607b"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Swift Version
+        run: swift --version
+      - name: Install the Static Linux SDK
+        run: swift sdk install "$STATIC_SDK_URL" --checksum "$STATIC_SDK_CHECKSUM"
+      - name: Build
+        # A binder client is not statically linkable in practice, but the point
+        # here is to compile the source against musl, so the ordinary product
+        # build is what matters.
+        run: swift build --swift-sdk ${{ matrix.arch }}-swift-linux-musl
