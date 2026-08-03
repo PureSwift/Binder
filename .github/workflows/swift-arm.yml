@@ -8,7 +8,7 @@ jobs:
       strategy:
         matrix:
           config: ["debug" , "release"]
-          swift: ["6.1.2"]
+          swift: ["6.3.3"]
           linux: ["raspios"]
           release: ["bookworm"]
           arch: ["armv6", "armv7"]
@@ -20,7 +20,7 @@ jobs:
           run: apt update -y; apt install wget -y
         - name: Install SDK
           run: |
-            wget https://github.com/xtremekforever/swift-armv7/releases/download/${{ matrix.swift }}/swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}-sdk.tar.gz
+            wget https://github.com/swift-embedded-linux/armhf-debian/releases/download/${{ matrix.swift }}/swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}-sdk.tar.gz
             tar -xvf swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}-sdk.tar.gz
             mv swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }} /opt/swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}
         - name: Swift Version
@@ -34,7 +34,7 @@ jobs:
       strategy:
         matrix:
           config: ["debug" , "release"]
-          swift: ["6.1.2"]
+          swift: ["6.3.3"]
           linux: ["debian"]
           release: ["bookworm", "bullseye"]
           arch: ["armv7"]
@@ -46,7 +46,7 @@ jobs:
           run: apt update -y; apt install wget -y
         - name: Install SDK
           run: |
-            wget https://github.com/xtremekforever/swift-armv7/releases/download/${{ matrix.swift }}/swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}-sdk.tar.gz
+            wget https://github.com/swift-embedded-linux/armhf-debian/releases/download/${{ matrix.swift }}/swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}-sdk.tar.gz
             tar -xvf swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}-sdk.tar.gz
             mv swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }} /opt/swift-${{ matrix.swift }}-RELEASE-${{ matrix.linux }}-${{ matrix.release }}-${{ matrix.arch }}
         - name: Swift Version
@@ -64,7 +64,7 @@ jobs:
       runs-on: ubuntu-latest
       strategy:
         matrix:
-          swift: ["6.0.3"]
+          swift: ["6.3.3"]
       container: swift:${{ matrix.swift }}
       steps:
         - name: Checkout
@@ -73,7 +73,7 @@ jobs:
           run: apt update -y; apt install wget -y
         - name: Install SDK
           run: |
-            wget https://github.com/xtremekforever/swift-armv7/releases/download/${{ matrix.swift }}/swift-${{ matrix.swift }}-RELEASE-debian-bookworm-armv7-sdk.tar.gz
+            wget https://github.com/swift-embedded-linux/armhf-debian/releases/download/${{ matrix.swift }}/swift-${{ matrix.swift }}-RELEASE-debian-bookworm-armv7-sdk.tar.gz
             tar -xvf swift-${{ matrix.swift }}-RELEASE-debian-bookworm-armv7-sdk.tar.gz
             mv swift-${{ matrix.swift }}-RELEASE-debian-bookworm-armv7 /opt/swift-${{ matrix.swift }}-RELEASE-debian-bookworm-armv7
         - name: Swift Version
