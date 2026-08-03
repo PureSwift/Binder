@@ -36,7 +36,7 @@ public final class RemoteProxy {
     /// problem the proxy exists to solve.
     public let object: RemoteObject
 
-    private let connection: BinderConnection
+    internal let connection: BinderConnection
 
     /// Adopt a strong reference that has already been taken.
     internal init(adopting object: RemoteObject, connection: BinderConnection) {
@@ -91,6 +91,15 @@ public extension RemoteProxy {
             request: request,
             flags: flags
         )
+    }
+
+    /// A weak reference to the same object.
+    ///
+    /// Holds its own weak count, independent of this strong one, so it outlives
+    /// this proxy and can be promoted again later — as long as the object is
+    /// still alive when it is.
+    func weak() throws(BinderError) -> WeakProxy {
+        try connection.weakReference(to: object)
     }
 }
 
