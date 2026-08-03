@@ -59,7 +59,13 @@ private func asyncSurfaceCompiles(_ connection: BinderConnection) async {
         _ = try await connection.service(named: "activity")
         _ = try await connection.checkService(named: "activity")
         _ = try await connection.services()
-        _ = try await connection.transact(handle: 0, code: 1, request: request)
+        _ = try await connection.transact(with: .contextManager, code: 1, request: request)
+
+        // A looked-up service is an owning reference and is callable directly,
+        // with no handle unwrapping at the call site.
+        if let service = try await connection.service(named: "activity") {
+            _ = try await service.transact(code: 1, request: request)
+        }
     } catch {
         // Typed: if this ever widens to `any Error`, the pattern stops
         // compiling and the async signatures have silently lost their type.
@@ -80,7 +86,20 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         _ = try connection.service(named: "activity")
         _ = try connection.checkService(named: "activity")
         _ = try connection.services()
-        _ = try connection.transact(handle: 0, code: 1, request: request)
+        _ = try connection.transact(with: .contextManager, code: 1, request: request)
+
+        if let service = try connection.checkService(named: "activity") {
+            _ = try service.transact(code: 1, request: request)
+        }
+
+        let object = RemoteObject(handle: 1)
+        try connection.acquire(object)
+        try connection.release(object)
+        try connection.incrementWeak(object)
+        try connection.decrementWeak(object)
+        _ = connection.adopt(object)
+        _ = try connection.retain(object)
+        try connection.addService(named: "example", object: object)
     } catch {
         let typed: BinderError = error
         _ = typed
