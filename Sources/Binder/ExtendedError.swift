@@ -60,15 +60,18 @@ public extension BinderConnection {
     /// order is misleading rather than merely stale.
     func lastError() throws(BinderError) -> ExtendedError {
         var value = ExtendedError()
+        #if ENABLE_MOCKING
+        assert(type(of: value).id.rawValue == BINDER_GET_EXTENDED_ERROR)
+        #else
+        // The do/catch lives inside the real branch on purpose: under mocking
+        // the block throws nothing, so a catch here would infer `any Error` and
+        // fail to convert to Errno.
         do {
-            #if ENABLE_MOCKING
-            assert(type(of: value).id.rawValue == BINDER_GET_EXTENDED_ERROR)
-            #else
             try device.handle.fileDescriptor.inputOutput(&value)
-            #endif
         } catch {
             throw BinderError.system(error)
         }
+        #endif
         return value
     }
 }

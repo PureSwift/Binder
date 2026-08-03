@@ -50,14 +50,16 @@ public extension BinderConnection {
     /// so a mistimed call costs a little memory churn rather than correctness.
     func exitThread() throws(BinderError) {
         var value = Binder.ThreadExit()
+        #if ENABLE_MOCKING
+        assert(type(of: value).id.rawValue == BINDER_THREAD_EXIT)
+        #else
+        // do/catch inside the real branch: under mocking the block throws
+        // nothing, so a catch would infer `any Error` rather than Errno.
         do {
-            #if ENABLE_MOCKING
-            assert(type(of: value).id.rawValue == BINDER_THREAD_EXIT)
-            #else
             try device.handle.fileDescriptor.inputOutput(&value)
-            #endif
         } catch {
             throw BinderError.system(error)
         }
+        #endif
     }
 }

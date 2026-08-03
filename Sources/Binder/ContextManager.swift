@@ -67,30 +67,36 @@ public extension BinderConnection {
     ///
     /// Nothing is delivered until a serving loop runs; see ``serve(while:)``.
     func becomeContextManager(securityContext: Bool = false) throws(BinderError) {
-        do {
-            if securityContext {
-                var object = flat_binder_object()
-                object.hdr = binder_object_header(type: .binder)
-                // The manager registers its own node; the security-context flag
-                // is what asks the driver for BR_TRANSACTION_SEC_CTX delivery.
-                object.flags = FlatBinderObjectFlags.txnSecurityCtx.rawValue
-                object.binder = 0
-                object.cookie = 0
-                #if ENABLE_MOCKING
-                assert(type(of: object).id.rawValue == BINDER_SET_CONTEXT_MGR_EXT)
-                #else
+        if securityContext {
+            var object = flat_binder_object()
+            object.hdr = binder_object_header(type: .binder)
+            // The manager registers its own node; the security-context flag is
+            // what asks the driver for BR_TRANSACTION_SEC_CTX delivery.
+            object.flags = FlatBinderObjectFlags.txnSecurityCtx.rawValue
+            object.binder = 0
+            object.cookie = 0
+            #if ENABLE_MOCKING
+            assert(type(of: object).id.rawValue == BINDER_SET_CONTEXT_MGR_EXT)
+            #else
+            do {
                 try device.handle.fileDescriptor.inputOutput(&object)
-                #endif
-            } else {
-                var value = Binder.SetContextManager()
-                #if ENABLE_MOCKING
-                assert(type(of: value).id.rawValue == BINDER_SET_CONTEXT_MGR)
-                #else
-                try device.handle.fileDescriptor.inputOutput(&value)
-                #endif
+            } catch {
+                throw BinderError.system(error)
             }
-        } catch {
-            throw BinderError.system(error)
+            #endif
+        } else {
+            var value = Binder.SetContextManager()
+            #if ENABLE_MOCKING
+            assert(type(of: value).id.rawValue == BINDER_SET_CONTEXT_MGR)
+            #else
+            // do/catch inside the real branch: under mocking nothing throws, so
+            // a catch would infer `any Error` rather than Errno.
+            do {
+                try device.handle.fileDescriptor.inputOutput(&value)
+            } catch {
+                throw BinderError.system(error)
+            }
+            #endif
         }
     }
 }
