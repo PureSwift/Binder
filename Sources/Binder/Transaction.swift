@@ -12,7 +12,8 @@ public extension BinderConnection {
     /// Send a transaction to a remote object and wait for its reply.
     ///
     /// - Parameters:
-    ///   - handle: the target's handle. `0` is always the context manager.
+    ///   - target: the object to call. ``RemoteObject/contextManager`` is
+    ///     always reachable; anything else has to be obtained from it first.
     ///   - code: the interface-defined transaction code.
     ///   - request: the payload.
     ///   - flags: `acceptFds` by default, matching libbinder. Adding `oneWay`
@@ -21,37 +22,51 @@ public extension BinderConnection {
     ///
     /// - Returns: the reply parcel, copied out of the mapped buffer.
     ///
+    ///   Any binder object in the reply arrives holding a **strong reference**
+    ///   that this connection took on the caller's behalf. Adopt it with
+    ///   ``adopt(_:)`` to have it released automatically, or release it by hand
+    ///   with ``release(_:)``. Dropping the parcel without doing either leaks
+    ///   the reference and keeps the target process alive.
+    ///
     /// Blocks the calling thread. A synchronous transaction has no
     /// non-blocking form — the driver parks the thread until the peer replies —
     /// so this must not be called from a thread something else needs.
     func transact(
-        handle: UInt32,
+        with target: RemoteObject,
         code: UInt32,
         request: Parcel,
         flags: TransactionFlags = .acceptFds
     ) throws(BinderError) -> Parcel {
-        // The driver reads the request through the pointer in
-        // binder_transaction_data rather than from a copy, so the bytes need an
-        // address that stays put for the whole exchange. A Swift array cannot
-        // promise that outside a `withUnsafe...` closure, and a closure would
-        // put the blocking wait somewhere errors cannot be typed, so the
-        // request is staged in memory this function owns.
+        // The driver reads the request through the pointers in
+        // binder_transaction_data rather than from a copy, so the bytes and the
+        // offsets both need addresses that stay put for the whole exchange. A
+        // Swift array cannot promise that outside a `withUnsafe...` closure, and
+        // a closure would put the blocking wait somewhere errors cannot be
+        // typed, so both are staged in memory this function owns.
         let staged = UnsafeMutableBufferPointer<UInt8>
             .allocate(capacity: Swift.max(request.bytes.count, 1))
         defer { staged.deallocate() }
         _ = staged.initialize(fromContentsOf: request.bytes)
 
+        // The driver rewrites handles only at the positions named here.
+        let offsets = UnsafeMutableBufferPointer<binder_size_t>
+            .allocate(capacity: Swift.max(request.objectOffsets.count, 1))
+        defer { offsets.deallocate() }
+        _ = offsets.initialize(
+            fromContentsOf: request.objectOffsets.map { binder_size_t($0) }
+        )
+
         var data = binder_transaction_data()
-        data.target.handle = handle
+        data.target.handle = target.handle
         data.cookie = 0
         data.code = code
         data.flags = flags.rawValue
         data.data_size = binder_size_t(request.bytes.count)
-        // No binder objects are placed in the parcel yet, so there are no
-        // offsets for the driver to translate.
-        data.offsets_size = 0
+        data.offsets_size = binder_size_t(
+            request.objectOffsets.count * MemoryLayout<binder_size_t>.size
+        )
         data.data.ptr.buffer = binder_uintptr_t(UInt(bitPattern: staged.baseAddress))
-        data.data.ptr.offsets = 0
+        data.data.ptr.offsets = binder_uintptr_t(UInt(bitPattern: offsets.baseAddress))
 
         var commands = CommandStream()
         commands.append(.transaction, payload: data)
@@ -127,11 +142,20 @@ internal extension BinderConnection {
                         throw BinderError.unexpectedReturn(element.command)
                     }
                     let reply = try copyReply(data)
-                    // The payload stays checked out of the mapping until it is
-                    // handed back. Returning without this leaks the mapping one
-                    // transaction at a time, until the process can no longer
-                    // receive anything at all.
-                    try freeBuffer(data.data.ptr.buffer)
+                    // Acquiring and freeing go out together, acquires first.
+                    //
+                    // The driver ties the reference it granted for each object
+                    // in this reply to the buffer, and drops it in
+                    // binder_transaction_buffer_release. So a handle decoded
+                    // from the reply is already dead if the buffer went back
+                    // first — and worse than dead, because the driver is free
+                    // to reissue that number for a different object.
+                    //
+                    // The payload also stays checked out of the mapping until
+                    // the free. Skipping it leaks the mapping one transaction
+                    // at a time, until the process can no longer receive
+                    // anything at all.
+                    try adoptObjectsAndFree(in: reply, buffer: data.data.ptr.buffer)
                     return reply
 
                 default:
@@ -197,34 +221,82 @@ internal extension BinderConnection {
             return Parcel()
         }
 
-        let start = UInt(data.data.ptr.buffer)
-        let mapping = UInt(bitPattern: buffer.address)
-        // The payload must lie inside the region we mapped. A descriptor
-        // pointing outside it would mean reading unmapped memory, so it is
-        // refused rather than trusted — this is data from another process.
-        guard start >= mapping,
-              start &+ UInt(size) <= mapping &+ UInt(buffer.size) else {
-            throw BinderError.replyOutOfBounds
+        let payload = try copyFromMapping(
+            at: data.data.ptr.buffer,
+            count: size,
+            as: UInt8.self
+        )
+
+        // The offsets array lives in the mapping too, alongside the payload.
+        let offsetCount = Int(data.offsets_size) / MemoryLayout<binder_size_t>.size
+        var offsets: [Int] = []
+        if offsetCount > 0 {
+            let raw = try copyFromMapping(
+                at: data.data.ptr.offsets,
+                count: offsetCount,
+                as: binder_size_t.self
+            )
+            // An offset naming a position outside the payload would send the
+            // object reader off the end, so they are filtered here rather than
+            // trusted — this array came from another process.
+            offsets = raw
+                .map { Int($0) }
+                .filter { $0 >= 0 && $0 + MemoryLayout<flat_binder_object>.size <= size }
         }
 
-        guard let pointer = UnsafeRawPointer(bitPattern: start) else {
-            throw BinderError.replyOutOfBounds
-        }
-        return Parcel(bytes: Array(UnsafeRawBufferPointer(start: pointer, count: size)))
+        return Parcel(bytes: payload, objectOffsets: offsets)
     }
 
-    /// Hand a received buffer back to the driver.
-    func freeBuffer(_ pointer: binder_uintptr_t) throws(BinderError) {
+    /// Copy a run of values out of the mapped region, bounds-checked.
+    ///
+    /// Every descriptor checked here arrives from another process, so none of
+    /// it is trusted: a pointer outside the mapping would mean reading unmapped
+    /// memory, and is refused rather than clamped.
+    private func copyFromMapping<T>(
+        at address: binder_uintptr_t,
+        count: Int,
+        as type: T.Type
+    ) throws(BinderError) -> [T] {
+        let size = count * MemoryLayout<T>.size
+        let start = UInt(address)
+        let mapping = UInt(bitPattern: buffer.address)
+
+        guard count >= 0,
+              start >= mapping,
+              start &+ UInt(size) <= mapping &+ UInt(buffer.size),
+              let pointer = UnsafeRawPointer(bitPattern: start) else {
+            throw BinderError.replyOutOfBounds
+        }
+
+        let raw = UnsafeRawBufferPointer(start: pointer, count: size)
+        return (0 ..< count).map {
+            raw.loadUnaligned(fromByteOffset: $0 * MemoryLayout<T>.size, as: T.self)
+        }
+    }
+
+    /// Take a strong reference to each object in a reply, then hand the buffer
+    /// back.
+    ///
+    /// One command stream, acquires ahead of the free, because the ordering is
+    /// the whole point: the driver applies them in the order it consumes them,
+    /// and the free is what drops the references the acquires are replacing.
+    func adoptObjectsAndFree(
+        in reply: Parcel,
+        buffer pointer: binder_uintptr_t
+    ) throws(BinderError) {
         var commands = CommandStream()
+        for object in reply.objects {
+            commands.append(.acquire, payload: object.handle)
+        }
         commands.append(.freeBuffer, payload: pointer)
 
         let readBuffer = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: 256)
         defer { readBuffer.deallocate() }
         readBuffer.initialize(repeating: 0)
 
-        // Sent on its own rather than batched onto the next transaction:
-        // holding it back would keep the mapping checked out indefinitely if
-        // the caller never transacts again.
+        // Sent now rather than batched onto the next transaction: holding it
+        // back would keep the mapping checked out indefinitely if the caller
+        // never transacts again.
         _ = try talkWithDriver(&commands, into: readBuffer)
     }
 }
