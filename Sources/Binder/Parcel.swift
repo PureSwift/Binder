@@ -37,21 +37,68 @@ public struct Parcel: Equatable, Hashable, Sendable {
     /// number that addresses something else in the receiving process.
     public private(set) var objectOffsets: [Int]
 
+    /// Out-of-line buffer payloads and where their descriptors sit.
+    ///
+    /// Each entry is the offset of a `binder_buffer_object` within ``bytes`` and
+    /// the bytes it names, which live here rather than inline. The transaction
+    /// path stages the payload and writes its address into the descriptor at
+    /// send time; see ``append(buffer:)``.
+    internal private(set) var scatterGatherBuffers: [(offset: Int, payload: [UInt8])]
+
     /// An empty parcel.
     public init() {
         self.bytes = []
         self.objectOffsets = []
+        self.scatterGatherBuffers = []
     }
 
     /// A parcel wrapping bytes already received from the driver.
     public init(bytes: [UInt8]) {
         self.bytes = bytes
         self.objectOffsets = []
+        self.scatterGatherBuffers = []
     }
 
     internal init(bytes: [UInt8], objectOffsets: [Int]) {
         self.bytes = bytes
         self.objectOffsets = objectOffsets
+        self.scatterGatherBuffers = []
+    }
+
+    internal init(
+        bytes: [UInt8],
+        objectOffsets: [Int],
+        scatterGatherBuffers: [(offset: Int, payload: [UInt8])]
+    ) {
+        self.bytes = bytes
+        self.objectOffsets = objectOffsets
+        self.scatterGatherBuffers = scatterGatherBuffers
+    }
+}
+
+// MARK: - Equatable, Hashable
+
+// Synthesised conformances would ignore the scatter-gather payloads, since the
+// tuple array is not itself Equatable; these fold them in so two parcels that
+// differ only in out-of-line data are not treated as equal.
+public extension Parcel {
+
+    static func == (lhs: Parcel, rhs: Parcel) -> Bool {
+        lhs.bytes == rhs.bytes
+            && lhs.objectOffsets == rhs.objectOffsets
+            && lhs.scatterGatherBuffers.count == rhs.scatterGatherBuffers.count
+            && zip(lhs.scatterGatherBuffers, rhs.scatterGatherBuffers).allSatisfy {
+                $0.offset == $1.offset && $0.payload == $1.payload
+            }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(bytes)
+        hasher.combine(objectOffsets)
+        for buffer in scatterGatherBuffers {
+            hasher.combine(buffer.offset)
+            hasher.combine(buffer.payload)
+        }
     }
 }
 
@@ -161,6 +208,13 @@ public extension Parcel {
     /// away from the bytes they describe.
     internal mutating func recordObjectOffset() {
         objectOffsets.append(bytes.count)
+    }
+
+    /// Note an out-of-line buffer: where its descriptor sits and the payload it
+    /// names. The descriptor's offset is also recorded as an object offset by
+    /// the caller, since the driver processes it alongside the others.
+    internal mutating func recordBuffer(at offset: Int, payload: [UInt8]) {
+        scatterGatherBuffers.append((offset: offset, payload: payload))
     }
 
     /// Zero-fill up to the next 4-byte boundary.
