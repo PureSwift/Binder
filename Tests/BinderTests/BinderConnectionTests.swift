@@ -100,6 +100,22 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         _ = connection.adopt(object)
         _ = try connection.retain(object)
         try connection.addService(named: "example", object: object)
+
+        // Hosting an object and serving it. The handler is @Sendable because
+        // several threads may serve one connection concurrently.
+        let hosted = connection.makeLocalObject(interface: "com.example.IThing") { transaction in
+            guard transaction.senderUserID == 1000 else { return nil }
+            var reply = Parcel()
+            reply.append(Int32(0))
+            return reply
+        }
+        var registration = Parcel()
+        registration.append(hosted)
+
+        connection.stopServing()
+        _ = connection.isServingTransactions
+        try connection.serve(while: { false })
+        connection.withdraw(hosted)
     } catch {
         let typed: BinderError = error
         _ = typed
