@@ -22,20 +22,35 @@ this as protocol-complete and field-unproven.
 
 ## Calling a service
 
+Every AIDL call has the same envelope around its arguments — interface token,
+transact, exception header, then the results. The `call` helper writes that
+envelope so a method supplies only its code and arguments:
+
 ```swift
 let binder = try BinderConnection()
 
 guard let activity = try binder.service(named: "activity") else { return }
 
+var reader = try activity.call(1, interface: "android.app.IActivityManager") {
+    $0.append("com.example")
+}
+let result = try reader.readString()   // reader starts at the results
+```
+
+The envelope is still there if you want it. The above is exactly:
+
+```swift
 var request = Parcel()
 request.appendInterfaceToken("android.app.IActivityManager")
 request.append("com.example")
 
 let reply = try activity.transact(code: 1, request: request)
 var reader = reply.reader()
-let exception = try reader.readInt32()
+let exception = try reader.readInt32()   // non-zero throws remoteException in call()
 let result = try reader.readString()
 ```
+
+`post` is the one-way form (no reply); `call` also has an `async` overload.
 
 `transact`, `service`, `checkService` and `services` each have an `async`
 overload. They are not natively asynchronous — a binder transaction blocks in the
@@ -51,16 +66,26 @@ step without manual `acquire`/`release`.
 
 ```swift
 let thing = binder.makeLocalObject(interface: "com.example.IThing") { transaction in
-    guard transaction.senderUserID == 1000 else { return nil }   // driver-supplied, unforgeable
-    var reply = Parcel()
-    reply.append(Int32(0))
-    return reply
+    guard transaction.senderUserID == 1000 else {   // driver-supplied, unforgeable
+        return Parcel.exception(-1)                  // EX_SECURITY
+    }
+    do {
+        var args = try transaction.arguments(interface: "com.example.IThing")
+        let name = try args.readString() ?? ""
+        return Parcel.reply { $0.append("hello:\(name)") }
+    } catch {
+        return Parcel.exception(-1)
+    }
 }
 
 try binder.addService(named: "com.example.thing", object: thing)
 
 try binder.serve()   // blocks, dispatching incoming calls
 ```
+
+`transaction.arguments(interface:)` reads and checks the interface token,
+returning a reader at the first argument; `Parcel.reply` / `Parcel.exception`
+write the reply's exception header for you.
 
 Register before serving: a caller that finds the service first simply blocks
 until the loop starts, rather than failing. Only `transaction.senderProcessID`
