@@ -167,6 +167,11 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         let proxy = connection.adopt(object)
         _ = try proxy.call(1, interface: "com.example.IThing") { $0.append("arg") }
         try proxy.post(2, interface: "com.example.IThing") { $0.append(Int32(1)) }
+
+        // Becoming the context manager, the one binder role beyond calling and
+        // serving.
+        try connection.becomeContextManager()
+        try connection.becomeContextManager(securityContext: true)
     } catch {
         let typed: BinderError = error
         _ = typed
