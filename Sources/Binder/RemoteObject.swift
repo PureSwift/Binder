@@ -15,10 +15,12 @@ import CBinder
 /// one has to go through ``Parcel/append(_:)-(RemoteObject)`` rather than
 /// writing the number.
 ///
-/// This type does **not** hold a reference count. libbinder acquires a strong
-/// reference on every handle it hands out and releases it when the last `sp<>`
-/// drops; nothing here does that yet, so a handle stays valid only as long as
-/// whatever else in the system is keeping the object alive.
+/// This type is the plain value — it does **not** own a reference. A handle is
+/// only valid while this process holds a reference to it, and the driver may
+/// reissue the number for a different object once the count reaches zero, so a
+/// bare `RemoteObject` kept across time can silently start addressing something
+/// else. ``RemoteProxy`` is the owning form; this one is for parcelling,
+/// comparison, and passing to ``BinderConnection/adopt(_:)``.
 public struct RemoteObject: Equatable, Hashable, Sendable {
 
     /// The driver's handle for this object in this process.
@@ -47,22 +49,45 @@ public extension Parcel {
 
     /// Append a reference to a remote object.
     ///
-    /// Written as a `flat_binder_object` inline in the payload. The driver
-    /// finds it through the parcel's offsets array and rewrites the handle for
-    /// the receiving process — which is why this is not simply an integer, and
-    /// why a parcel carrying one needs its offsets declared to the driver.
-    ///
-    /// - Note: offsets are not yet tracked, so a transaction carrying this will
-    ///   not have the object translated. Sending an object is therefore not
-    ///   supported end to end; the encoding is here because reading one back
-    ///   needs the same layout.
+    /// Written as a `flat_binder_object` inline in the payload, and its
+    /// position recorded in ``objectOffsets``. The driver rewrites the handle
+    /// for the receiving process, but only at positions the transaction names —
+    /// it cannot find objects by scanning, since a payload is opaque bytes to
+    /// it and an integer that happens to look like an object header would be
+    /// indistinguishable from one. An object written without its offset
+    /// recorded arrives as a number addressing something else entirely.
     mutating func append(_ value: RemoteObject) {
         var object = flat_binder_object()
         object.hdr = binder_object_header(type: .handle)
         object.flags = FlatBinderObjectFlags.acceptsFDs.rawValue
         object.handle = value.handle
         object.cookie = 0
+
+        recordObjectOffset()
         append(bitPattern: object)
+    }
+}
+
+public extension Parcel {
+
+    /// Every binder object this parcel carries, in wire order.
+    ///
+    /// For a reply, these are the objects the driver translated into this
+    /// process, each of which arrived holding a strong reference.
+    var objects: [RemoteObject] {
+        objectOffsets.compactMap { offset in
+            let size = MemoryLayout<flat_binder_object>.size
+            guard offset >= 0, offset + size <= bytes.count else { return nil }
+            let object = Array(bytes[offset ..< offset + size])
+                .withUnsafeBytes { $0.loadUnaligned(as: flat_binder_object.self) }
+            guard let type = BinderType(rawValue: object.hdr.type) else { return nil }
+            switch type {
+            case .handle, .weakHandle:
+                return RemoteObject(handle: object.handle)
+            default:
+                return nil
+            }
+        }
     }
 }
 
