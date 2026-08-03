@@ -63,14 +63,4 @@ public enum BinderError: Error, Equatable, Hashable, Sendable {
     /// A protocol-level outcome rather than a transport failure: the
     /// transaction itself succeeded.
     case remoteException(Int32)
-
-    /// The operation needs to place a binder object in a parcel, which is not
-    /// supported yet.
-    ///
-    /// The driver only translates a `flat_binder_object` if the transaction
-    /// declares the offset at which it sits, and ``Parcel`` does not track
-    /// offsets. Encoding the object without declaring it would send a handle
-    /// that is meaningless in the receiving process, so the attempt is refused
-    /// instead.
-    case objectOffsetsUnsupported
 }
