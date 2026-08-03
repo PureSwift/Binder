@@ -137,10 +137,10 @@ directly.
 
 ## Not yet implemented
 
-- File-descriptor passing (`BINDER_TYPE_FD`, `BINDER_TYPE_FDA`) and
-  scatter-gather transactions (`BC_TRANSACTION_SG`).
-- Weak-reference promotion — the `wp<>` half of the model. The commands exist;
-  a weak proxy does not.
-- Most of the maintenance ioctls (`freeze`, node debug info, extended error).
+- Arrays of file descriptors (`BINDER_TYPE_FDA`). Single descriptors
+  (`BINDER_TYPE_FD`) and scatter-gather buffers, including nested ones, are
+  supported.
+- The freeze and node-debug maintenance ioctls (`BINDER_FREEZE`,
+  `BINDER_GET_NODE_DEBUG_INFO`, `BINDER_GET_NODE_INFO_FOR_REF`).
 - `serve()` cannot interrupt itself while parked in the driver; closing the
   connection is what ends a quiet loop.
