@@ -83,7 +83,11 @@ internal extension MappedBuffer {
         // MAP_NORESERVE because the mapping is large and almost never fully
         // used; reserving swap for all of it would charge every binder client
         // a megabyte of commit it will not touch.
-        let address = mmap(
+        // Typed as optional so both mmap return shapes fit: Glibc and Darwin
+        // import it as an implicitly-unwrapped optional, Bionic as a plain
+        // pointer, and a non-optional coerces into the optional binding while
+        // an IUO stays bindable.
+        let result: UnsafeMutableRawPointer? = mmap(
             nil,
             size,
             PROT_READ,
@@ -92,7 +96,11 @@ internal extension MappedBuffer {
             0
         )
 
-        guard let address, address != MAP_FAILED else {
+        // MAP_FAILED is ((void *) -1). Comparing the bit pattern rather than the
+        // macro keeps this working on Bionic, whose Swift overlay does not
+        // import MAP_FAILED.
+        guard let address = result,
+              address != UnsafeMutableRawPointer(bitPattern: -1) else {
             throw Errno(rawValue: errno)
         }
 
