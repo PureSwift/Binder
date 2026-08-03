@@ -56,6 +56,28 @@ public extension BinderConnection {
             fromContentsOf: request.objectOffsets.map { binder_size_t($0) }
         )
 
+        // Out-of-line buffers live outside the parcel bytes, so each payload is
+        // staged separately and its address written into its descriptor. The
+        // staged buffers must outlive the ioctl, so they are freed only after
+        // the exchange, not on the way out of this scope.
+        var stagedBuffers: [UnsafeMutableBufferPointer<UInt8>] = []
+        defer { stagedBuffers.forEach { $0.deallocate() } }
+        for buffer in request.scatterGatherBuffers {
+            let payload = UnsafeMutableBufferPointer<UInt8>
+                .allocate(capacity: Swift.max(buffer.payload.count, 1))
+            _ = payload.initialize(fromContentsOf: buffer.payload)
+            stagedBuffers.append(payload)
+
+            // Overwrite the placeholder pointer in the descriptor's `buffer`
+            // field, at offset 8 within the binder_buffer_object.
+            let address = binder_uintptr_t(UInt(bitPattern: payload.baseAddress))
+            withUnsafeBytes(of: address) { source in
+                for index in 0 ..< source.count {
+                    staged[buffer.offset + Self.bufferObjectPointerOffset + index] = source[index]
+                }
+            }
+        }
+
         var data = binder_transaction_data()
         data.target.handle = target.handle
         data.cookie = 0
@@ -69,10 +91,25 @@ public extension BinderConnection {
         data.data.ptr.offsets = binder_uintptr_t(UInt(bitPattern: offsets.baseAddress))
 
         var commands = CommandStream()
-        commands.append(.transaction, payload: data)
+        if request.hasBuffers {
+            // BC_TRANSACTION_SG wraps the same transaction with the total space
+            // the driver must reserve for the out-of-line buffers.
+            var scatterGather = binder_transaction_data_sg()
+            scatterGather.transaction_data = data
+            scatterGather.buffers_size = binder_size_t(request.buffersSize)
+            commands.append(.transactionSg, payload: scatterGather)
+        } else {
+            commands.append(.transaction, payload: data)
+        }
 
         return try waitForResponse(commands, isOneWay: flags.contains(.oneWay))
     }
+
+    /// Offset of the `buffer` pointer within a `binder_buffer_object`.
+    ///
+    /// Named rather than literal because it is written into staged bytes by
+    /// hand, where a wrong value corrupts the descriptor silently.
+    fileprivate static var bufferObjectPointerOffset: Int { 8 }
 }
 
 internal extension BinderConnection {
@@ -244,7 +281,23 @@ internal extension BinderConnection {
                 .filter { $0 >= 0 && $0 + MemoryLayout<flat_binder_object>.size <= size }
         }
 
-        return Parcel(bytes: payload, objectOffsets: offsets)
+        // A received buffer object's descriptor points into the mapping, which
+        // is about to be released, so each out-of-line payload is copied out
+        // now — the same reason the inline bytes are. Without this a reader
+        // would follow a dangling pointer into freed shared memory.
+        var buffers: [(offset: Int, payload: [UInt8])] = []
+        for offset in offsets {
+            guard offset + MemoryLayout<binder_buffer_object>.size <= size else { continue }
+            let descriptor = Array(payload[offset ..< offset + MemoryLayout<binder_buffer_object>.size])
+                .withUnsafeBytes { $0.loadUnaligned(as: binder_buffer_object.self) }
+            guard descriptor.hdr.type == BinderType.pointer.rawValue else { continue }
+
+            let length = Int(descriptor.length)
+            let data = try copyFromMapping(at: descriptor.buffer, count: length, as: UInt8.self)
+            buffers.append((offset: offset, payload: data))
+        }
+
+        return Parcel(bytes: payload, objectOffsets: offsets, scatterGatherBuffers: buffers)
     }
 
     /// Copy a run of values out of the mapped region, bounds-checked.
