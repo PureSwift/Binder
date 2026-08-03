@@ -1,2 +1,121 @@
 # Binder
-Swift Android Binder library
+
+A Swift client for the Android Binder IPC driver (`/dev/binder`), talking the
+same protocol as `libbinder` so it can call, and be called by, Android services
+— on Android itself or on desktop Linux driving a container such as Waydroid.
+
+Pure Swift, on `apple/swift-system` and `PureSwift/Socket`. No C++, no
+`libbinder`.
+
+## Status
+
+The full protocol layer is implemented and unit-tested: the parcel wire format,
+the `BINDER_WRITE_READ` command codec, transactions in both directions, the
+service manager, reference counting, hosting local objects, a serving loop, and
+death notifications.
+
+**None of it has run against a real driver.** The test host has no binder
+kernel module, so every ioctl path is reasoned from the kernel source and
+`libbinder` rather than observed. The tests cover encoding, decoding, the object
+registries and the loop's dispatch decisions — not the kernel conversation. Treat
+this as protocol-complete and field-unproven.
+
+## Calling a service
+
+```swift
+let binder = try BinderConnection()
+
+guard let activity = try binder.service(named: "activity") else { return }
+
+var request = Parcel()
+request.appendInterfaceToken("android.app.IActivityManager")
+request.append("com.example")
+
+let reply = try activity.transact(code: 1, request: request)
+var reader = reply.reader()
+let exception = try reader.readInt32()
+let result = try reader.readString()
+```
+
+`transact`, `service`, `checkService` and `services` each have an `async`
+overload. They are not natively asynchronous — a binder transaction blocks in the
+driver until the peer replies — so the async forms move that blocking call off
+the cooperative pool onto the connection's own queue. See
+`Transaction+Async.swift` for what that costs.
+
+A looked-up service is a `RemoteProxy`: it owns one strong reference and releases
+it on `deinit`, so the driver's reference count and Swift's object graph stay in
+step without manual `acquire`/`release`.
+
+## Hosting a service
+
+```swift
+let thing = binder.makeLocalObject(interface: "com.example.IThing") { transaction in
+    guard transaction.senderUserID == 1000 else { return nil }   // driver-supplied, unforgeable
+    var reply = Parcel()
+    reply.append(Int32(0))
+    return reply
+}
+
+try binder.addService(named: "com.example.thing", object: thing)
+
+try binder.serve()   // blocks, dispatching incoming calls
+```
+
+Register before serving: a caller that finds the service first simply blocks
+until the loop starts, rather than failing. Only `transaction.senderProcessID`
+and `senderUserID` are trustworthy for a permission check — the driver fills them
+in; everything in the request parcel is whatever the caller chose to write.
+
+## Death notifications
+
+The only race-free way to learn a peer has gone — a handle never becomes
+detectably invalid on its own, and the driver may reissue a dead handle's number
+for a different object.
+
+```swift
+let watch = try binder.notifyOnDeath(of: activity.object) {
+    // runs on a serving thread
+}
+try binder.cancel(watch)   // confirmed by the driver, not retired locally
+```
+
+## Design
+
+| Type | Role |
+|---|---|
+| `BinderConnection` | an open, mapped device; the entry point for everything |
+| `Parcel` | the serialised payload — read and write, with object offsets tracked |
+| `RemoteObject` / `RemoteProxy` | a handle, and an owning strong reference to one |
+| `LocalObject` | an object this process hosts for others to call |
+| `ServiceManager` | the context manager at handle 0 |
+| `DeathNotification` | a standing watch on a remote object's process |
+| `CommandStream` / `ReturnStream` | the `BC_*` / `BR_*` codec under `BINDER_WRITE_READ` |
+
+The layering is deliberate. `Binder` is a bare open device — enough to read the
+protocol version, nothing more. `BinderConnection` is the usable thing: it maps
+the receive buffer, checks the version, and refuses to continue on a mismatch,
+in the order `libbinder`'s `ProcessState` does. Deciding what an incoming command
+requires (`action(for:)`) is kept separate from sending the response, so the part
+where a serving loop actually goes wrong is a pure, testable function.
+
+## Building
+
+```sh
+swift build
+swift test
+```
+
+Requires Swift 6.0+. The two tests that need `/dev/binder` skip when it is
+absent, so the suite passes on any host; the rest exercise the protocol layer
+directly.
+
+## Not yet implemented
+
+- File-descriptor passing (`BINDER_TYPE_FD`, `BINDER_TYPE_FDA`) and
+  scatter-gather transactions (`BC_TRANSACTION_SG`).
+- Weak-reference promotion — the `wp<>` half of the model. The commands exist;
+  a weak proxy does not.
+- Most of the maintenance ioctls (`freeze`, node debug info, extended error).
+- `serve()` cannot interrupt itself while parked in the driver; closing the
+  connection is what ends a quiet loop.
