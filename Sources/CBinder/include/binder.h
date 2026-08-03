@@ -33,7 +33,13 @@
 
 #endif
 
-#ifdef __APPLE__
+// The kernel uapi headers (<linux/types.h>, <linux/ioctl.h>) ship with glibc
+// and Bionic but not with musl, and never on Apple. So a libc without them —
+// Apple, or a Linux libc that is neither glibc nor Bionic, which in practice
+// means musl — gets the kernel integer types defined here, and takes the ioctl
+// macros from <sys/ioctl.h> instead. glibc and Bionic keep using the real
+// kernel headers.
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__GLIBC__) && !defined(__BIONIC__))
 
 typedef uint8_t   __u8;
 typedef uint16_t  __u16;
@@ -47,6 +53,11 @@ typedef int64_t   __s64;
 
 typedef pid_t     __kernel_pid_t;
 typedef uid_t     __kernel_uid32_t;
+
+#if !defined(__APPLE__)
+// musl: _IOW / _IOR / _IOWR come from here rather than <linux/ioctl.h>.
+#include <sys/ioctl.h>
+#endif
 
 #else
 

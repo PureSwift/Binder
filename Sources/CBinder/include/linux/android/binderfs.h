@@ -6,8 +6,13 @@
  */
 #ifndef _UAPI_LINUX_BINDERFS_H
 #define _UAPI_LINUX_BINDERFS_H
+// Modified from the auto-generated original for musl, as in binder.h: the
+// vendored binder.h is included on any Linux (it defines the __uN types for
+// musl itself), but the kernel uapi headers are gated on glibc or Bionic.
 #if __linux__
 #include <linux/android/binder.h>
+#endif
+#if defined(__linux__) && (defined(__GLIBC__) || defined(__BIONIC__))
 #include <linux/types.h>
 #include <linux/ioctl.h>
 #endif
