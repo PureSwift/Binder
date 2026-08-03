@@ -9,10 +9,15 @@ let libraryType: PackageDescription.Product.Library.LibraryType? = dynamicLibrar
 let package = Package(
     name: "Binder",
     platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
-        .watchOS(.v6),
-        .tvOS(.v13),
+        // Raised for Synchronization.Mutex, which the serving loop and the
+        // object registries use and which is macOS 15 / iOS 18 / watchOS 11 /
+        // tvOS 18 or newer. These are the Darwin mocking-build minimums; the
+        // real target is Linux and Android, where the version gate does not
+        // apply.
+        .macOS(.v15),
+        .iOS(.v18),
+        .watchOS(.v11),
+        .tvOS(.v18),
     ],
     products: [
         .library(
