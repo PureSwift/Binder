@@ -1,5 +1,10 @@
 name: Swift
 on: [push]
+
+env:
+  # The single toolchain the whole matrix builds against. Bump here.
+  SWIFT_VERSION: "6.3.3"
+
 jobs:
 
   macos:
@@ -12,22 +17,27 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    # The macos-15 runner's bundled Swift trails the pinned version, so the
+    # toolchain is installed rather than taken from Xcode.
+    - name: Install Swift ${{ env.SWIFT_VERSION }}
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: ${{ env.SWIFT_VERSION }}
     - name: Swift Version
       run: swift --version
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
     - name: Test
       run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
-  
+
   linux:
     name: Linux
     strategy:
       matrix:
-        container: ["swift:6.0.3", "swift:6.1.2"]
         config: ["debug", "release"]
         options: ["", "SWIFT_BUILD_DYNAMIC_LIBRARY=1"]
     runs-on: ubuntu-latest
-    container: ${{ matrix.container }}-jammy
+    container: swift:6.3.3
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -42,19 +52,18 @@ jobs:
     - name: Test
       run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
 
-  android-arm:
-      name: Android
-      strategy:
-        fail-fast: false
-        matrix:
-          swift: ['6.1', 'nightly-6.2']
-          arch: ["aarch64", "x86_64"]
-      runs-on: macos-15
-      timeout-minutes: 30
-      steps:
-        - uses: actions/checkout@v4
-        - name: "Build Swift Package for Android"
-          run: |
-              brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
-              skip android sdk install --version ${{ matrix.swift }}
-              ANDROID_NDK_ROOT="" skip android build --arch ${{ matrix.arch }}
+  android:
+    name: Android
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ["aarch64", "x86_64"]
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Build Swift Package for Android"
+        run: |
+            brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
+            skip android sdk install --version ${{ env.SWIFT_VERSION }}
+            ANDROID_NDK_ROOT="" skip android build --arch ${{ matrix.arch }}
