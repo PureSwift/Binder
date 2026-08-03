@@ -5,10 +5,19 @@
 
 import SystemPackage
 
+// mmap/munmap/sysconf come from the platform C library, which is a different
+// module on each. Android is the point of this library, so its Bionic module
+// has to be here — without it `canImport(Glibc)` is false on Android and none
+// of these symbols resolve. The module is spelled `Android` on the swift.org
+// Android SDK and `Bionic` on some toolchains, so both are covered.
 #if canImport(Glibc)
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif canImport(Android)
+import Android
+#elseif canImport(Bionic)
+import Bionic
 #elseif canImport(Darwin)
 import Darwin
 #endif
