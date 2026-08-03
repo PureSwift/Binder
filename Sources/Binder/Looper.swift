@@ -224,6 +224,24 @@ internal extension BinderConnection {
             fromContentsOf: parcel.objectOffsets.map { binder_size_t($0) }
         )
 
+        // Out-of-line buffers in a reply are staged and fixed up exactly as in
+        // an outgoing transaction; they must outlive the ioctl.
+        var stagedBuffers: [UnsafeMutableBufferPointer<UInt8>] = []
+        defer { stagedBuffers.forEach { $0.deallocate() } }
+        for buffer in parcel.scatterGatherBuffers {
+            let payload = UnsafeMutableBufferPointer<UInt8>
+                .allocate(capacity: Swift.max(buffer.payload.count, 1))
+            _ = payload.initialize(fromContentsOf: buffer.payload)
+            stagedBuffers.append(payload)
+
+            let address = binder_uintptr_t(UInt(bitPattern: payload.baseAddress))
+            withUnsafeBytes(of: address) { source in
+                for index in 0 ..< source.count {
+                    staged[buffer.offset + 8 + index] = source[index]
+                }
+            }
+        }
+
         var data = binder_transaction_data()
         // A reply has no target: the driver matches it to the transaction this
         // thread is currently answering.
@@ -239,7 +257,14 @@ internal extension BinderConnection {
         data.data.ptr.offsets = binder_uintptr_t(UInt(bitPattern: offsets.baseAddress))
 
         var commands = CommandStream()
-        commands.append(.reply, payload: data)
+        if parcel.hasBuffers {
+            var scatterGather = binder_transaction_data_sg()
+            scatterGather.transaction_data = data
+            scatterGather.buffers_size = binder_size_t(parcel.buffersSize)
+            commands.append(.replySg, payload: scatterGather)
+        } else {
+            commands.append(.reply, payload: data)
+        }
         // The request's buffer goes back in the same stream, after the reply
         // has been queued from it.
         commands.append(.freeBuffer, payload: request.data.ptr.buffer)
