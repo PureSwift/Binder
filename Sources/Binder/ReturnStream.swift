@@ -51,10 +51,7 @@ public enum ReturnStreamError: Error, Equatable, Hashable, Sendable {
 public extension ReturnStream {
 
     /// One command and its payload bytes.
-    ///
-    /// Equatable but not Hashable: `command` is a C-imported `DriverReturnProtocol`,
-    /// which is not Hashable on Swift 6.0.x, and nothing hashes an element.
-    struct Element: Equatable, Sendable {
+    struct Element: Equatable, Hashable, Sendable {
 
         public let command: DriverReturnProtocol
 
