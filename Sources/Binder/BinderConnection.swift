@@ -60,6 +60,9 @@ public final class BinderConnection {
     /// The objects this connection hosts for other processes to call.
     internal let localObjects = LocalObjectRegistry()
 
+    /// Standing requests to be told when a remote object's process dies.
+    internal let deaths = DeathRegistry()
+
     /// Whether a serving loop should keep going.
     ///
     /// Read by every serving thread and written by ``stopServing()``, which is
