@@ -18,9 +18,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     # The macos-15 runner's bundled Swift trails the pinned version, so the
-    # toolchain is installed rather than taken from Xcode.
+    # toolchain is installed rather than taken from Xcode. SwiftyLab/setup-swift
+    # resolves versions from swift.org dynamically via swiftly, so it can
+    # install a release the older swift-actions/setup-swift does not yet list.
     - name: Install Swift ${{ env.SWIFT_VERSION }}
-      uses: swift-actions/setup-swift@v2
+      uses: SwiftyLab/setup-swift@latest
       with:
         swift-version: ${{ env.SWIFT_VERSION }}
     - name: Swift Version
