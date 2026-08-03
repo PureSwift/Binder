@@ -116,6 +116,15 @@ private func syncSurfaceCompiles(_ connection: BinderConnection) {
         _ = connection.isServingTransactions
         try connection.serve(while: { false })
         connection.withdraw(hosted)
+
+        // Liveness, and the standing watch that does not race with it.
+        _ = try connection.ping(object)
+        _ = connection.isServiceManagerPresent
+
+        let watch = try connection.notifyOnDeath(of: object) {
+            // Runs on a serving thread, hence @Sendable.
+        }
+        try connection.cancel(watch)
     } catch {
         let typed: BinderError = error
         _ = typed
