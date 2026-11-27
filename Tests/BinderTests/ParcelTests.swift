@@ -200,6 +200,13 @@ struct ParcelTests {
         #expect(throws: ParcelError.endOfParcel) { try reader.readString() }
     }
 
+    @Test func rejectsHugeStringLengthsBeforeCalculatingByteCount() {
+        var parcel = Parcel()
+        parcel.append(Int32.max - 1)
+        var reader = parcel.reader()
+        #expect(throws: ParcelError.endOfParcel) { try reader.readString() }
+    }
+
     @Test func reportsInvalidLengthForNegativeByteArray() {
         let parcel = Parcel(bytes: [0xFE, 0xFF, 0xFF, 0xFF])
         var reader = parcel.reader()
@@ -231,5 +238,92 @@ struct ParcelTests {
         #expect(try reader.readInt32() == 7)
         #expect(try reader.readBool() == true)
         #expect(reader.isAtEnd)
+    }
+}
+
+@Test func frameworkInterfaceTokenWireFormat() throws {
+    var parcel = Parcel()
+    parcel.appendInterfaceToken("A😀")
+    #expect(parcel.bytes == [
+        0, 0, 0, 0x80, // StrictMode penalty gather
+        0xFF, 0xFF, 0xFF, 0xFF, // No propagated WorkSource
+        0x54, 0x53, 0x59, 0x53, // SYST header
+        3, 0, 0, 0, 0x41, 0, 0x3D, 0xD8, 0, 0xDE, 0, 0,
+    ])
+    var reader = parcel.reader()
+    try reader.enforceInterface("A😀")
+    #expect(reader.isAtEnd)
+    reader = parcel.reader()
+    #expect(throws: ParcelError.wrongInterface(expected: "other", found: "A😀")) {
+        try reader.enforceInterface("other")
+    }
+}
+
+@Test func parcelReadsReplyHeadersAndServiceFailure() throws {
+    var reply = Parcel()
+    reply.append(Int32(-127))
+    reply.append(Int32(8))
+    reply.append(Int32(0))
+    reply.append(Int32(-8))
+    reply.append("failed")
+    reply.append(Int32(0))
+    reply.append(Int32(42))
+    var reader = reply.reader()
+    #expect(throws: ParcelError.remoteException(code: -8, message: "failed", serviceCode: 42)) {
+        try reader.readException()
+    }
+    #expect(reader.isAtEnd)
+}
+
+@Test func localStubDispatchesStandardTransactions() async throws {
+    let stub = BinderStub(descriptor: "demo.IExample")
+    let reply = try await stub.transact(code: BinderConstants.interfaceTransaction, data: Parcel(), flags: [])
+    var reader = reply.reader()
+    #expect(try reader.readString() == "demo.IExample")
+    let ping = try await stub.transact(code: BinderConstants.pingTransaction, data: Parcel(), flags: [])
+    #expect(ping.isEmpty)
+    await #expect(throws: BinderTransactionError.unknownTransaction(42)) {
+        try await stub.transact(code: 42, data: Parcel(), flags: [])
+    }
+}
+
+@Test func localProxyAndStubRoundTrip() async throws {
+    let stub = EchoStub()
+    let proxy = EchoProxy(remote: stub)
+    #expect(proxy.asBinder() === stub)
+    #expect(try await proxy.echo(42) == 42)
+}
+
+private struct EchoProxy: BinderProxy {
+    static let descriptor = "demo.IEcho"
+    let remote: any IBinder
+
+    func echo(_ value: Int32) async throws -> Int32 {
+        var request = Parcel()
+        request.appendInterfaceToken(Self.descriptor)
+        request.append(value)
+        let reply = try await remote.transact(code: BinderConstants.firstCallTransaction, data: request, flags: [])
+        var reader = reply.reader()
+        try reader.readException()
+        return try reader.readInt32()
+    }
+}
+
+private final class EchoStub: BinderStub, @unchecked Sendable {
+    init() {
+        super.init(descriptor: EchoProxy.descriptor)
+    }
+
+    override func onTransact(
+        code: UInt32, data: inout Parcel.Reader, reply: inout Parcel, flags: TransactionFlags
+    ) async throws -> Bool {
+        guard code == BinderConstants.firstCallTransaction else {
+            return try await super.onTransact(code: code, data: &data, reply: &reply, flags: flags)
+        }
+        try data.enforceInterface(interfaceDescriptor)
+        let value = try data.readInt32()
+        reply.writeNoException()
+        reply.append(value)
+        return true
     }
 }

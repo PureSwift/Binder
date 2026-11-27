@@ -101,6 +101,16 @@ public extension Parcel {
 
 public extension Parcel.Reader {
 
+    /// Check that the request names the interface served by this endpoint.
+    mutating func enforceInterface(
+        _ descriptor: String, header: RPCHeader = .system
+    ) throws(ParcelError) {
+        let actual = try readInterfaceToken(header: header)
+        guard actual?.utf16.elementsEqual(descriptor.utf16) == true else {
+            throw .wrongInterface(expected: descriptor, found: actual)
+        }
+    }
+
     /// Read and check the header at the front of an incoming request.
     ///
     /// - Returns: the descriptor, if the marker matched.

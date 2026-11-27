@@ -261,6 +261,9 @@ public enum ParcelError: Error, Equatable, Hashable, Sendable {
     /// the transaction was routed to an object that does not implement what the
     /// caller asked for.
     case wrongInterface(expected: String, found: String?)
+
+    /// An exception reported in an Android framework reply.
+    case remoteException(code: Int32, message: String?, serviceCode: Int32?)
 }
 
 // MARK: - Reading
@@ -311,8 +314,11 @@ public extension Parcel.Reader {
     /// forgetting it desynchronises the cursor and every subsequent read
     /// returns plausible garbage rather than failing.
     mutating func read(count length: Int) throws(ParcelError) -> ArraySlice<UInt8> {
+        guard length >= 0, length <= remaining, length <= Int.max - 3 else {
+            throw ParcelError.endOfParcel
+        }
         let padded = Parcel.paddedSize(length)
-        guard length >= 0, offset + padded <= bytes.count else {
+        guard padded <= remaining else {
             throw ParcelError.endOfParcel
         }
         let value = bytes[offset ..< offset + length]
@@ -369,6 +375,9 @@ public extension Parcel.Reader {
 
         // The terminator is on the wire but not in the length.
         let count = Int(length) + 1
+        guard count <= remaining / MemoryLayout<UTF16.CodeUnit>.size else {
+            throw ParcelError.endOfParcel
+        }
         let slice = try read(count: count * MemoryLayout<UTF16.CodeUnit>.size)
 
         var units = [UTF16.CodeUnit]()
@@ -396,5 +405,43 @@ public extension Parcel.Reader {
         guard length != -1 else { return nil }
         guard length >= 0 else { throw ParcelError.invalidLength(length) }
         return Array(try read(count: Int(length)))
+    }
+}
+
+public extension Parcel {
+    /// Append the success status that precedes an Android framework reply.
+    mutating func writeNoException() {
+        append(Int32(0))
+    }
+}
+
+public extension Parcel.Reader {
+    /// Consume the status at the start of an Android framework reply.
+    mutating func readException() throws(ParcelError) {
+        var code = try readInt32()
+        if code == -127 { // AppOps header followed by the usual exception code.
+            try skipSizedHeader()
+            code = try readInt32()
+        }
+        if code == -128 { // StrictMode header occupies the success status.
+            try skipSizedHeader()
+            return
+        }
+        guard code != 0 else { return }
+        let message = try readString()
+        try skipSizedHeader() // Remote stack trace, if present.
+        let serviceCode = code == -8 ? try readInt32() : nil
+        if code == -9 { try skipSizedHeader() }
+        throw .remoteException(code: code, message: message, serviceCode: serviceCode)
+    }
+
+    private mutating func skipSizedHeader() throws(ParcelError) {
+        let size = try readInt32()
+        if size == 0 { return }
+        let prefixSize = MemoryLayout<Int32>.size
+        guard size >= Int32(prefixSize), size.isMultiple(of: Int32(prefixSize)) else {
+            throw .invalidLength(size)
+        }
+        _ = try read(count: Int(size) - prefixSize)
     }
 }
