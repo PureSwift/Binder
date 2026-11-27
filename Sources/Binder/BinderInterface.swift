@@ -26,7 +26,7 @@ public extension BinderProxy {
 }
 
 public protocol BinderParcelable: Sendable {
-    init(from parcel: inout Parcel) throws
+    init(from reader: inout Parcel.Reader) throws
 
     func write(to parcel: inout Parcel) throws
 }
@@ -45,23 +45,21 @@ open class BinderStub: IBinder, @unchecked Sendable {
     }
 
     public final func transact(code: UInt32, data: Parcel, flags: TransactionFlags) async throws -> Parcel {
-        var request = data
+        var request = data.reader()
         var reply = Parcel()
-        try request.setDataPosition(0)
         guard try await onTransact(code: code, data: &request, reply: &reply, flags: flags) else {
             throw BinderTransactionError.unknownTransaction(code)
         }
         if flags.contains(.oneWay) { return Parcel() }
-        try reply.setDataPosition(0)
         return reply
     }
 
     open func onTransact(
-        code: UInt32, data: inout Parcel, reply: inout Parcel, flags: TransactionFlags
+        code: UInt32, data: inout Parcel.Reader, reply: inout Parcel, flags: TransactionFlags
     ) async throws -> Bool {
         switch code {
         case BinderConstants.interfaceTransaction:
-            try reply.writeString16(interfaceDescriptor)
+            reply.append(interfaceDescriptor)
         case BinderConstants.pingTransaction:
             break
         default:
