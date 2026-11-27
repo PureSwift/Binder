@@ -29,11 +29,11 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/apple/swift-system",
-            from: "1.5.0"
+            from: "1.9.0"
         ),
         .package(
             url: "https://github.com/PureSwift/Socket",
-            branch: "main"
+            from: "0.7.0"
         )
     ],
     targets: [
