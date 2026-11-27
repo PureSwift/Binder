@@ -72,7 +72,8 @@ jobs:
           swift sdk install https://download.swift.org/swift-6.4.2-release/android-sdk/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz \
             --checksum 4d6ad63ea74becd58e123ff58b1b48c3be5ec0db0dff0ea5abe37ac007dd3233
       - name: Build Swift Package for Android
-        run: swift build --swift-sdk swift-6.4.2-RELEASE_android --triple ${{ matrix.arch }}-unknown-linux-android23
+        # Socket uses if_nameindex and if_freenameindex, available since API 24.
+        run: swift build --swift-sdk swift-6.4.2-RELEASE_android --triple ${{ matrix.arch }}-unknown-linux-android24
 
   # Cross-compile against Apple's Static Linux SDK, which is musl-based. This
   # is what exercises the musl path in CBinder — the kernel uapi headers are
